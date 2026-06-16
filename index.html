@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>宣纸老街</title>
+  <link rel="stylesheet" href="style.css?v=20260616f">
+</head>
+<body>
+  <main id="gameRoot" class="game-root">
+    <section id="introScreen" class="intro-screen" aria-label="宣纸老街开始界面">
+      <div class="steam-puff" style="--size:60px; --x:28%; --y:38%; --dur:4.2s; --delay:0s; --op:0.22;"></div>
+      <div class="steam-puff" style="--size:48px; --x:32%; --y:40%; --dur:5.1s; --delay:1.3s; --op:0.18;"></div>
+      <div class="steam-puff" style="--size:72px; --x:25%; --y:35%; --dur:6.4s; --delay:0.7s; --op:0.15;"></div>
+      <div class="steam-puff" style="--size:40px; --x:35%; --y:42%; --dur:3.8s; --delay:2.1s; --op:0.20;"></div>
+      <div class="steam-puff" style="--size:56px; --x:30%; --y:36%; --dur:5.7s; --delay:3.0s; --op:0.16;"></div>
+      <div class="steam-puff" style="--size:50px; --x:22%; --y:33%; --dur:4.9s; --delay:1.8s; --op:0.19;"></div>
+      <div class="steam-puff" style="--size:64px; --x:34%; --y:37%; --dur:6.0s; --delay:2.6s; --op:0.14;"></div>
+      <div class="steam-puff" style="--size:44px; --x:27%; --y:31%; --dur:4.5s; --delay:3.5s; --op:0.17;"></div>
+    </section>
+
+    <section id="gameScreen" class="game-screen hidden" aria-label="宣纸老街游戏画面">
+      <header class="hud ui-layer-item">
+        <div class="hud-item">
+          <span class="hud-label">金币</span>
+          <strong id="coinText">0</strong>
+        </div>
+        <div class="hud-item">
+          <span class="hud-label">声望</span>
+          <strong id="reputationText">0</strong>
+        </div>
+        <div class="hud-task">
+          <span class="hud-label">当前任务</span>
+          <strong id="taskText"></strong>
+        </div>
+      </header>
+
+      <div id="mapViewport" class="map-viewport">
+        <div id="mapWorld" class="map-world">
+          <div id="backgroundLayer" class="map-layer background-layer" aria-hidden="true">
+            <img id="streetMap" class="street-map map-raster" src="assets/street-map.png" alt="宣纸老街主地图">
+          </div>
+          <div id="entityLayer" class="map-layer entity-layer">
+            <div id="environmentLayer" class="environment-layer" aria-hidden="true">
+              <span class="map-steam map-steam-a"></span>
+              <span class="map-steam map-steam-b"></span>
+              <span class="map-lantern-glow map-lantern-a"></span>
+              <span class="map-lantern-glow map-lantern-b"></span>
+              <span class="water-shimmer water-shimmer-a"></span>
+              <span class="water-shimmer water-shimmer-b"></span>
+              <span class="water-shimmer water-shimmer-c"></span>
+              <span class="paper-drift paper-drift-a"></span>
+              <span class="paper-drift paper-drift-b"></span>
+              <span class="paper-drift paper-drift-c"></span>
+            </div>
+            <div id="player" class="player map-player dir-down" data-depth-sort="true" aria-label="玩家角色"></div>
+          </div>
+          <div id="foregroundLayer" class="map-layer foreground-layer" aria-hidden="true">
+            <img id="streetForeground" class="street-foreground map-raster" src="assets/street-foreground.png" alt="">
+          </div>
+          <div id="mapDebugLayer" class="map-debug-layer" aria-hidden="true"></div>
+        </div>
+        <div id="uiLayer" class="ui-layer">
+          <div id="interactionPrompt" class="interaction-prompt hidden"></div>
+          <div id="debugReadout" class="debug-readout hidden"></div>
+          <button id="mobileInteractButton" class="mobile-interact-button hidden" type="button">交互</button>
+          <div id="orientationHint" class="orientation-hint hidden">建议横屏体验《宣纸老街》</div>
+          <button id="mobilePauseButton" class="mobile-pause-button hidden" type="button">暂停</button>
+          <div id="mobileControls" class="mobile-controls hidden" aria-label="虚拟摇杆">
+            <div id="joystickBase" class="joystick-base">
+              <div id="joystickStick" class="joystick-stick"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <footer class="control-bar ui-layer-item">
+        <span>A / ← 左移</span>
+        <span>W / ↑ 上移</span>
+        <span>D / → 右移</span>
+        <span>S / ↓ 下移</span>
+        <span>E 交互</span>
+        <span>空格 小游戏操作</span>
+        <span>F2 调试</span>
+        <span>Esc 返回或关闭弹窗</span>
+      </footer>
+    </section>
+
+    <div id="modalLayer" class="modal-layer hidden ui-layer-item" role="dialog" aria-modal="true" aria-live="polite">
+      <div id="modalCard" class="modal-card"></div>
+    </div>
+
+    <div id="pauseLayer" class="pause-layer hidden ui-layer-item" role="dialog" aria-modal="true" aria-labelledby="pauseTitle">
+      <div class="pause-card">
+        <h2 id="pauseTitle">暂停</h2>
+        <div class="pause-actions">
+          <button class="primary-btn" type="button" data-pause-action="resume">继续游戏</button>
+          <button class="secondary-btn" type="button" data-pause-action="returnStart">返回开始界面</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast hidden ui-layer-item" role="status"></div>
+  </main>
+
+  <script src="game.js?v=20260616f" defer></script>
+</body>
+</html>
