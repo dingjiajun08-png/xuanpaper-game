@@ -5543,3 +5543,197 @@ button {
   .festival-reward-items span,
   .festival-reward-items b { padding: 6px 10px; font-size: 12px; }
 }
+
+/* 纸市非遗节：雅集视觉升级 */
+.modal-card.festival-modal-card {
+  overflow: hidden;
+  border-color: #4b3021;
+  box-shadow: 0 28px 80px rgba(20, 13, 8, 0.62), 0 0 0 1px rgba(244, 218, 151, 0.24);
+}
+
+.festival-entry,
+.paper-festival {
+  background:
+    linear-gradient(135deg, rgba(255, 249, 224, 0.93), rgba(248, 237, 203, 0.9) 46%, rgba(226, 224, 193, 0.92)),
+    url("assets/festival-xuan-paper-texture.png") center / cover;
+}
+
+.festival-entry {
+  min-height: 442px;
+  padding: 76px 86px 54px;
+  gap: 14px;
+  isolation: isolate;
+}
+
+.festival-entry::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 30px 54px;
+  border: 1px solid rgba(128, 91, 45, 0.28);
+  box-shadow: inset 0 0 0 7px rgba(255, 249, 221, 0.32);
+  pointer-events: none;
+}
+
+.festival-entry-kicker {
+  display: inline-flex;
+  align-items: center;
+  justify-self: center;
+  gap: 10px;
+  padding: 7px 14px;
+  color: #55705d;
+  background: rgba(247, 242, 211, 0.68);
+  border: 1px solid rgba(80, 107, 82, 0.38);
+  box-shadow: 0 5px 14px rgba(82, 68, 45, 0.09);
+  font-size: 12px;
+  letter-spacing: 0.2em;
+}
+
+.festival-entry-kicker::before,
+.festival-entry-kicker::after {
+  width: 18px;
+  height: 1px;
+  background: currentColor;
+  content: "";
+  opacity: 0.7;
+}
+
+.festival-entry h2 {
+  color: #582c20;
+  font-size: clamp(42px, 6vw, 64px);
+  letter-spacing: 0.13em;
+  text-shadow: 2px 3px 0 rgba(255, 244, 200, 0.92), 5px 7px 16px rgba(77, 38, 25, 0.15);
+}
+
+.festival-entry-lead {
+  max-width: 540px;
+  margin: 0 auto;
+  color: #584330;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.95;
+}
+
+.festival-entry-highlights {
+  display: flex;
+  justify-content: center;
+  gap: 9px;
+  margin: 4px 0 8px;
+}
+
+.festival-entry-highlights span {
+  padding: 5px 10px;
+  color: #6e4a2f;
+  background: rgba(246, 225, 170, 0.58);
+  border: 1px solid rgba(137, 87, 49, 0.42);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.festival-entry-actions { margin-top: 10px; }
+
+.festival-entry .festival-primary-btn {
+  min-width: 188px;
+  color: #fff5d4;
+  background: linear-gradient(135deg, #8a3526, #b85739 55%, #7a2e22);
+  border-color: #4d241b;
+  box-shadow: 0 7px 0 #4d241b, 0 12px 22px rgba(77, 36, 27, 0.28), inset 0 1px 0 rgba(255, 231, 166, 0.4);
+}
+
+.festival-entry .festival-primary-btn:hover { filter: saturate(1.1) brightness(1.06); }
+
+.paper-festival {
+  padding: 22px 26px 18px;
+  gap: 16px;
+}
+
+.paper-festival-header {
+  min-height: 72px;
+  padding: 9px 16px;
+  background:
+    linear-gradient(90deg, rgba(246, 222, 159, 0.84), rgba(255, 246, 211, 0.5) 48%, rgba(194, 210, 172, 0.56)),
+    url("assets/festival-xuan-paper-texture.png") center / cover;
+  border: 2px solid rgba(81, 49, 30, 0.7);
+  box-shadow: inset 0 0 0 3px rgba(255, 247, 207, 0.48), 0 5px 0 rgba(79, 47, 30, 0.22);
+}
+
+.paper-festival-header > div > p {
+  color: #6e6041;
+  font-size: 12px;
+  letter-spacing: 0.18em;
+}
+
+.paper-festival-header h2 {
+  color: #542b20;
+  font-size: clamp(27px, 3vw, 36px);
+  letter-spacing: 0.11em;
+}
+
+.paper-festival-header > div > span {
+  color: #566d58;
+  font-size: 13px;
+  letter-spacing: 0.05em;
+}
+
+.festival-market-scene {
+  overflow: hidden;
+  border: 2px solid #684630;
+  box-shadow: inset 0 0 0 4px rgba(255, 245, 205, 0.44), 0 10px 20px rgba(74, 42, 26, 0.16);
+}
+
+.festival-market-scene::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 237, 181, 0.13), transparent 24%, transparent 75%, rgba(65, 43, 29, 0.16));
+  mix-blend-mode: multiply;
+}
+
+.festival-stalls { position: relative; z-index: 2; }
+
+.festival-booth {
+  transition: transform 180ms ease, filter 180ms ease;
+}
+
+.festival-booth:hover {
+  transform: translateY(-5px) scale(1.01);
+  filter: drop-shadow(0 12px 0 rgba(71, 45, 30, 0.26));
+}
+
+.booth-label {
+  background: linear-gradient(135deg, #4b2a20, #6e3928 58%, #48271e);
+  border-color: #2e1a15;
+  box-shadow: 0 4px 0 rgba(45, 25, 18, 0.78), 5px 6px 12px rgba(46, 25, 18, 0.2), inset 0 1px 0 rgba(251, 221, 157, 0.22);
+}
+
+.booth-label strong { color: #fff0bf; letter-spacing: 0.08em; }
+.booth-label em { color: #d9c184; }
+
+.paper-festival-footer {
+  padding: 12px 4px 2px;
+  border-top-color: rgba(90, 55, 35, 0.65);
+}
+
+.festival-counters span {
+  min-width: 118px;
+  padding: 8px 10px 8px 30px;
+  color: #5a3d2b;
+  background: rgba(255, 247, 216, 0.82);
+  border-color: rgba(107, 66, 40, 0.8);
+  box-shadow: 3px 3px 0 rgba(75, 45, 29, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.62);
+}
+
+@media (max-width: 768px), (hover: none) and (pointer: coarse) {
+  .festival-entry { min-height: 380px; padding: 62px 22px 38px; }
+  .festival-entry::after { inset: 24px 16px; }
+  .festival-entry h2 { font-size: 38px; }
+  .festival-entry-lead { font-size: 14px; line-height: 1.75; }
+  .festival-entry-highlights span { padding: 4px 7px; font-size: 10px; }
+  .paper-festival { padding: 14px 12px; }
+  .paper-festival-header { min-height: 64px; padding: 7px 9px; }
+  .paper-festival-header > div > span { font-size: 11px; }
+  .festival-counters span { min-width: 0; padding: 6px 7px 6px 23px; }
+}

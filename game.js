@@ -1019,13 +1019,15 @@ function openFestivalEntrance() {
       <div class="festival-entry-corner festival-entry-corner-tr" aria-hidden="true"></div>
       <div class="festival-entry-corner festival-entry-corner-bl" aria-hidden="true"></div>
       <div class="festival-entry-corner festival-entry-corner-br" aria-hidden="true"></div>
-      <p class="festival-entry-kicker">老街节令 · 今日开市</p>
+      <p class="festival-entry-kicker">宣纸老街 · 节令雅集</p>
       <h2 id="festivalEntryTitle">纸市非遗节</h2>
-      <p>今日是纸市非遗节，街上来了许多游客、书画家和纸坊摊主。</p>
-      <p>要不要去集市看看？</p>
+      <p class="festival-entry-lead">一张纸，藏着山水与匠心。循着墨香入市，与四位行家交换一枚纸上的答案。</p>
+      <div class="festival-entry-highlights" aria-label="纸市活动亮点">
+        <span>四席匠艺</span><span>限时探访</span><span>集印成册</span>
+      </div>
       <div class="festival-entry-actions">
-        <button class="festival-primary-btn" type="button" data-action="enterFestival">进入集市</button>
-        <button class="festival-secondary-btn" type="button" data-action="close">稍后再来</button>
+        <button class="festival-primary-btn" type="button" data-action="enterFestival">开启纸市之旅</button>
+        <button class="festival-secondary-btn" type="button" data-action="close">暂不前往</button>
       </div>
     </section>
   `, "modal", "festival-modal-card");
@@ -1059,9 +1061,9 @@ function openPaperFestival() {
       <header class="paper-festival-header">
         <span class="festival-header-lantern" aria-hidden="true"></span>
         <div>
-          <p>老街纸市 · 节令限定</p>
+          <p>宣纸老街 · 节令雅集</p>
           <h2 id="paperFestivalTitle">纸市非遗节</h2>
-          <span>把宣纸铺学到的知识，用在热闹的纸市里。</span>
+          <span>四席匠艺，以纸会友；集齐四枚知识印章。</span>
         </div>
         <span class="festival-header-leaves" aria-hidden="true"></span>
       </header>
@@ -1095,9 +1097,9 @@ function openPaperFestival() {
       </div>
       <footer class="paper-festival-footer">
         <div class="festival-counters">
-          <span class="festival-counter-coins">纸市铜钱 <b>${state.paperCoins}</b></span>
-          <span class="festival-counter-stamps">知识印章 <b>${state.earnedStamps.size}</b> / ${festivalTasks.length}</span>
-          <span>进度 <b>${completed}</b> / ${festivalTasks.length}</span>
+          <span class="festival-counter-coins">行旅铜钱 <b>${state.paperCoins}</b></span>
+          <span class="festival-counter-stamps">纸市印章 <b>${state.earnedStamps.size}</b> / ${festivalTasks.length}</span>
+          <span>探访进度 <b>${completed}</b> / ${festivalTasks.length}</span>
         </div>
         <button class="festival-secondary-btn" type="button" data-action="close">返回老街</button>
       </footer>
