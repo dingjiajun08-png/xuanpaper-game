@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>宣纸老街</title>
-  <link rel="stylesheet" href="style.css?v=20260616f">
+  <link rel="stylesheet" href="style.css?v=20260621a">
 </head>
 <body>
   <main id="gameRoot" class="game-root">
@@ -38,7 +38,7 @@
       <div id="mapViewport" class="map-viewport">
         <div id="mapWorld" class="map-world">
           <div id="backgroundLayer" class="map-layer background-layer" aria-hidden="true">
-            <img id="streetMap" class="street-map map-raster" src="assets/street-map.png" alt="宣纸老街主地图">
+            <img id="streetMap" class="street-map map-raster" src="assets/Image 2026年6月14日 23_31_41.png" alt="宣纸老街主地图">
           </div>
           <div id="entityLayer" class="map-layer entity-layer">
             <div id="environmentLayer" class="environment-layer" aria-hidden="true">
@@ -53,6 +53,9 @@
               <span class="paper-drift paper-drift-b"></span>
               <span class="paper-drift paper-drift-c"></span>
             </div>
+            <div class="map-npc map-npc--paper-seller map-npc--image" style="left: 690px; top: 900px;" data-map-x="690" data-map-y="900" data-depth-sort="true" data-depth-y="900" aria-label="集市纸品摊主"></div>
+            <div class="map-npc map-npc--visitor map-npc--image" style="left: 680px; top: 930px;" data-map-x="680" data-map-y="930" data-depth-sort="true" data-depth-y="930" aria-label="集市游客"></div>
+            <div class="map-npc map-npc--tea-guest map-npc--image" style="left: 830px; top: 900px;" data-map-x="830" data-map-y="900" data-depth-sort="true" data-depth-y="900" aria-label="集市茶客"></div>
             <div id="player" class="player map-player dir-down" data-depth-sort="true" aria-label="玩家角色"></div>
           </div>
           <div id="foregroundLayer" class="map-layer foreground-layer" aria-hidden="true">
@@ -63,10 +66,9 @@
         <div id="uiLayer" class="ui-layer">
           <div id="interactionPrompt" class="interaction-prompt hidden"></div>
           <div id="debugReadout" class="debug-readout hidden"></div>
-          <button id="mobileInteractButton" class="mobile-interact-button hidden" type="button">交互</button>
           <div id="orientationHint" class="orientation-hint hidden">建议横屏体验《宣纸老街》</div>
-          <button id="mobilePauseButton" class="mobile-pause-button hidden" type="button">暂停</button>
-          <div id="mobileControls" class="mobile-controls hidden" aria-label="虚拟摇杆">
+        <button id="mobilePauseButton" class="mobile-pause-button mobile-only hidden" type="button">暂停</button>
+        <div id="mobileControls" class="mobile-controls mobile-only hidden" aria-label="虚拟摇杆">
             <div id="joystickBase" class="joystick-base">
               <div id="joystickStick" class="joystick-stick"></div>
             </div>
@@ -74,7 +76,7 @@
         </div>
       </div>
 
-      <footer class="control-bar ui-layer-item">
+      <footer class="control-bar desktop-only ui-layer-item">
         <span>A / ← 左移</span>
         <span>W / ↑ 上移</span>
         <span>D / → 右移</span>
