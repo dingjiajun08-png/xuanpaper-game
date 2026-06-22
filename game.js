@@ -10,6 +10,12 @@ const PLAYER_SPRITE = {
   collisionOffsetY: 44,
   animationMs: 180
 };
+const INTERACT_KEY = "e";
+const INTERACT_KEY_CODE = `Key${INTERACT_KEY.toUpperCase()}`;
+const INTERACT_KEY_LABEL = INTERACT_KEY.toUpperCase();
+const NPC_INTERACT_KEY = "f";
+const NPC_INTERACT_KEY_CODE = `Key${NPC_INTERACT_KEY.toUpperCase()}`;
+const NPC_INTERACT_KEY_LABEL = NPC_INTERACT_KEY.toUpperCase();
 
 // ========================================
 // 平台区分：缓存结果，避免每帧 matchMedia
@@ -34,6 +40,44 @@ function invalidateMobileCache() {
 // 当前平台类型："desktop" | "mobile"
 let currentPlatform = "desktop";
 
+const MARKET_NPC_DIALOGUES = Object.freeze({
+  paperSeller: {
+    name: "宣纸摊主",
+    lines: ["来看看宣纸吧！", "生宣洇墨快。", "熟宣适合工笔。"]
+  },
+  craftsperson: {
+    name: "非遗匠人",
+    lines: ["捞纸要稳一点。", "今天有手作体验。", "完成可解锁图鉴。"]
+  },
+  marketVisitor: {
+    name: "集市游客",
+    lines: ["金币能换纪念物。", "非遗馆有新展品。", "这个集市真热闹！"]
+  },
+  grandmother: {
+    name: "外婆",
+    interactionRange: 44,
+    bubbleLines: ["纸卖错了，再好的纸也会误了人家的笔墨。", "纸有筋骨，人有手艺。", "认懂纸性，才算真正走进这条老街。"],
+    storyLines: ["宣屿，这间铺子不是缺纸，是缺一个真正懂纸的人。", "先认纸性。纸卖错了，再好的纸也会误了人家的笔墨。"]
+  },
+  teahouseOwner: {
+    name: "茶馆老板",
+    promptLabel: "听茶馆传闻",
+    bubbleLines: ["老街的茶还热着。"],
+    randomRumors: [
+      "听说非遗馆那本《纸谱十二笺》，以前是你外婆亲手整理的。",
+      "青檀林那边风大，老匠人说，好纸的筋骨要从山里找。",
+      "书画铺最近来了不少人，不同的人要的纸可不一样。",
+      "集市四席行家都不好糊弄，答得上来，才算真懂纸。",
+      "做纸急不得，喝茶也急不得，都讲一个慢字。"
+    ]
+  },
+  forestElder: { name: "护林老人", bubbleLines: ["林子不是仓库，不能只取不养。"] },
+  workshopMaster: { name: "工坊师傅", bubbleLines: ["浆不匀，纸就不稳。"] },
+  dryingElder: { name: "晒纸老人", bubbleLines: ["别急，纸还没晒到时候。"] },
+  galleryCurator: { name: "非遗馆馆长", bubbleLines: ["展柜放的是物，故事要靠人讲。"] }
+});
+const NPC_DIALOGUE_RANGE = 64;
+
 function detectPlatform() {
   const mobile = isMobileInput();
   const next = mobile ? "mobile" : "desktop";
@@ -55,7 +99,13 @@ const state = {
   introActive: true,
   coins: 0,
   reputation: 0,
-  task: "去工坊制作第一张宣纸",
+  upgrades: { bambooMat: false, pulpRecipe: false, workbench: false, barkStorage: false },
+  currentOrder: null,
+  orderQueue: [],
+  orderJudgments: new Set(),
+  paperPages: { qingtan: false, straw: false, water: false, craft: false, drying: false, paperNature: false, heritage: false },
+  completedQuests: new Set(),
+  task: "探索宣纸铺与纸境千年",
   player: { x: PLAYER_SPAWN.x, y: PLAYER_SPAWN.y, speed: 4.2, direction: "down", frame: 0, lastFrameAt: 0 },
   camera: { x: 0, y: 0, width: 0, height: 0 },
   map: {
@@ -78,39 +128,55 @@ const state = {
   paperShopStoryStage: 0,
   paperShopLevel: 1,
   paperCoins: 0,
+  festivalBuffs: { luckyCharm: 0, bambooOil: 0 }, // 集市兑换的临时增益次数
   earnedStamps: new Set(),
   completedFestivalTasks: new Set(),
   festivalMilestoneShown: false,
+  storyChapter: 1,           // 主线章节 1-3
+  storyMilestones: {},       // 章节内里程碑 { "firstPaper": true, "firstOrder": false, ... }
+  ordersCompleted: 0,        // 累计完成订单数
+  finaleShown: false,
   festivalCompleteShown: false,
   orderComplete: false,
   modalOpen: false,
+  // UI 导航统一由这里维护，避免每个弹窗各自关闭后直接丢失来源页面。
+  pageStack: [],
+  currentPage: "map",
+  currentPageOptions: null,
   miniGame: null,
   debugMode: false,
   toastTimer: null,
   joystickVector,
   joystickActive: false,
-  joystickPointerId: null
+  joystickPointerId: null,
+  npcDialogueIndex: Object.fromEntries(Object.entries(MARKET_NPC_DIALOGUES).map(([id, dialogue]) => [
+    id,
+    dialogue.bubbleLines ? Math.floor(Math.random() * dialogue.bubbleLines.length) : 0
+  ])),
+  nearbyNpcDialogueId: null
 };
 
 // 根据宣纸铺柜台位置调整此坐标：用于打开“宣纸铺·分类图鉴”。
 const paperShopInteractZone = { x: 650, y: 716, width: 182, height: 86 };
 
 const interactionZones = [
-  { id: "qingtanForest", name: "青檀林入口", prompt: "按 E 前往青檀林入口", x: 150, y: 80, width: 130, height: 90 },
-  { id: "dryingYard", name: "晒纸场", prompt: "按 E 查看晒纸场", x: 744, y: 250, width: 76, height: 118 },
-  { id: "calligraphyShop", name: "书画铺", prompt: "按 E 进入书画铺", x: 566, y: 408, width: 88, height: 60 },
-  { id: "teaHouse", name: "茶馆", prompt: "按 E 进入茶馆", x: 922, y: 362, width: 110, height: 52 },
-  { id: "workshop", name: "宣纸工坊区", prompt: "按 E 进入工坊", x: 1200, y: 374, width: 116, height: 54 },
-  { id: "waterWheel", name: "水车", prompt: "按 E 查看水车", x: 318, y: 618, width: 96, height: 74 },
+  // 热区顺着山径延展，避免入口牌坊和山石把可交互点卡在不可站立的位置。
+  { id: "qingtanForest", name: "青檀林入口", prompt: "进入青檀林，寻找纸的筋骨", mobilePrompt: "进入青檀林", x: 134, y: 108, width: 142, height: 184 },
+  // 溪边小路是玩家从老街前往林口的实际通道；与牌坊入口通向同一段剧情，避免路线被水面与水车碰撞打断。
+  { id: "qingtanForestTrail", name: "溪边小路 · 青檀林入口", prompt: "沿溪边小路前往青檀林", mobilePrompt: "前往青檀林", x: 280, y: 430, width: 160, height: 190 },
+  { id: "dryingYard", name: "晒纸场", prompt: "查看晒纸场", x: 744, y: 250, width: 76, height: 118 },
+  { id: "calligraphyShop", name: "书画铺", prompt: "查看订单看板", x: 566, y: 408, width: 88, height: 60 },
+  { id: "workshop", name: "宣纸工坊区", prompt: "进入工坊", x: 1200, y: 374, width: 116, height: 54 },
+  { id: "waterWheel", name: "水车", prompt: "查看水车", x: 318, y: 618, width: 96, height: 74 },
   {
     id: "paperShop",
     name: "宣纸铺·分类图鉴",
-    prompt: "按 E 查看宣纸分类图鉴",
+    prompt: "查看宣纸分类图鉴",
     mobilePrompt: "查看宣纸分类图鉴",
     ...paperShopInteractZone
   },
-  { id: "museum", name: "非遗馆", prompt: "按 E 进入非遗馆", x: 1160, y: 714, width: 158, height: 84 },
-  { id: "market", name: "纸市非遗节", prompt: "按 E 前往纸市非遗节", mobilePrompt: "进入纸市非遗节", x: 620, y: 790, width: 280, height: 78 },
+  { id: "museum", name: "非遗馆", prompt: "进入非遗馆", x: 1160, y: 714, width: 158, height: 84 },
+  { id: "market", name: "纸境千年", prompt: "前往纸境千年", mobilePrompt: "进入纸境千年", x: 540, y: 800, width: 430, height: 140 },
 ];
 
 const collisionBoxes = [
@@ -182,26 +248,322 @@ const paperStats = {
   Miss: { toughness: 60, ink: 65, evenness: 55, whiteness: 70, durability: 62 }
 };
 
+// ========================================
+// 工坊升级系统
+// ========================================
+const UPGRADES = {
+  bambooMat: {
+    id: "bambooMat",
+    name: "竹帘品质",
+    desc: "指针判定区域扩大，更容易出Perfect",
+    cost: 200,
+    effect: "perfectRange",
+    icon: "🎋"
+  },
+  pulpRecipe: {
+    id: "pulpRecipe",
+    name: "纸浆配方",
+    desc: "纸张基础属性+10%",
+    cost: 150,
+    effect: "baseBuff",
+    icon: "🧪"
+  },
+  workbench: {
+    id: "workbench",
+    name: "工作台",
+    desc: "制作动画加快20%",
+    cost: 300,
+    effect: "speedBuff",
+    icon: "🔨"
+  },
+  barkStorage: {
+    id: "barkStorage",
+    name: "树皮仓库",
+    desc: "每日树皮采集上限+10",
+    cost: 250,
+    effect: "storageBuff",
+    icon: "🏠"
+  }
+};
+
+// ========================================
+// 扩展NPC订单系统 - 12位有故事的街坊
+// 每一位NPC都有独特背景、需求对话和科普知识
+// ========================================
+const ORDER_TYPES = [
+  // ---- 基础订单（声望0解锁） ----
+  {
+    id: "calligraphyMaster",
+    name: "普通订单",
+    npc: "书法家王大爷",
+    paperType: "生宣",
+    requirements: { ink: 75, evenness: 75, toughness: 70 },
+    reward: { gold: 80, reputation: 10 },
+    timeLimit: null,
+    dialogue: '这张纸吸墨要稳，纸面得匀。写行草最怕纸面跳墨。',
+    scienceTip: '生宣未经过胶矾加工，保留了原纸较强的吸水性和渗化性。青檀皮纤维较长，带来韧性与拉力；稻草纤维较短，帮助形成均匀细密的纸面。'
+  },
+  {
+    id: "masterLi",
+    name: "普通订单",
+    npc: "画师李姐",
+    paperType: "半熟宣",
+    requirements: { ink: 70, evenness: 80, toughness: 75 },
+    reward: { gold: 90, reputation: 12 },
+    timeLimit: null,
+    dialogue: '我画花鸟小写意，纸要半生不熟的，既有点墨韵又不能洇太大。',
+    scienceTip: '半熟宣不是固定工艺名，而是"半生半熟"的纸性状态。它通常经过轻度施胶或压光处理，吸水速度介于生宣和熟宣之间，容错率高，尤其适合新手。'
+  },
+  {
+    id: "academyStudent",
+    name: "普通订单",
+    npc: "书院学生小陈",
+    paperType: "生宣",
+    requirements: { ink: 70, evenness: 70, toughness: 65 },
+    reward: { gold: 60, reputation: 8 },
+    timeLimit: null,
+    dialogue: '先生要我交一幅大字作业，我挑了半天纸，还是老街的宣纸最靠谱。',
+    scienceTip: '宣纸有"千年寿纸"之称，因其纤维原料——青檀皮和沙田稻草——富含纤维素且杂质少，加上传统的碱性制浆工艺，纸张不易酸化老化，可以保存数百年。'
+  },
+  {
+    id: "calligraphyApprentice",
+    name: "普通订单",
+    npc: "书法学徒小赵",
+    paperType: "半熟宣",
+    requirements: { ink: 65, evenness: 70, toughness: 65 },
+    reward: { gold: 50, reputation: 6 },
+    timeLimit: null,
+    dialogue: '我才学书法半年，想买些不太贵的纸来练手。您推荐哪种？',
+    scienceTip: '练习书法建议选半熟宣或机制毛边纸，性价比高且容错率好。熟练后再尝试生宣——生宣最考验控墨功力，一笔下去便无法修改。'
+  },
+
+  // ---- 精品订单（声望>=25解锁） ----
+  {
+    id: "premiumCourt",
+    name: "精品订单",
+    npc: "宫廷画师",
+    paperType: "熟宣",
+    requirements: { ink: 85, evenness: 85, toughness: 85, whiteness: 85, durability: 85 },
+    reward: { gold: 200, reputation: 25 },
+    timeLimit: null,
+    unlockRep: 25,
+    dialogue: '本官要画一幅工笔花鸟，线条必须纤毫毕现。纸不能洇，墨色边界要稳。',
+    scienceTip: '熟宣是在生宣基础上经过胶矾加工而成。胶质在纸面和纤维之间形成阻隔，使水墨不易渗入；矾帮助固定胶料，让纸面的渗化性大大降低。尤其适合工笔画的精细勾线和反复设色。'
+  },
+  {
+    id: "mountMaster",
+    name: "精品订单",
+    npc: "装裱匠人张叔",
+    paperType: "生宣",
+    requirements: { toughness: 88, evenness: 82, durability: 85 },
+    reward: { gold: 180, reputation: 22 },
+    timeLimit: null,
+    unlockRep: 25,
+    dialogue: '裱画的纸，韧性得好，耐久度得高。一张好裱能让画多传三代人。',
+    scienceTip: '装裱是中国书画特有的保护工艺，用宣纸、绫绢等材料对原画进行托裱、覆背。宣纸之所以适合装裱，是因为其纤维弹性好、干湿收缩率小，能随画心一起"呼吸"，不易变形开裂。'
+  },
+  {
+    id: "collectorChen",
+    name: "精品订单",
+    npc: "收藏家老陈",
+    paperType: "熟宣",
+    requirements: { whiteness: 90, durability: 88, evenness: 85 },
+    reward: { gold: 220, reputation: 28 },
+    timeLimit: null,
+    unlockRep: 35,
+    dialogue: '我收了一幅民国小楷，想配一张纸色相近、纸面细腻的老宣纸来衬托。',
+    scienceTip: '宣纸的"洁白度"并非越白越好。传统宣纸呈自然的象牙白色，是因为原料未经过强漂白处理，保留了纤维本来的色泽。这种自然白度不刺眼，墨色落上去更柔和。'
+  },
+
+  // ---- 限时订单（声望>=45解锁） ----
+  {
+    id: "timedScholar",
+    name: "限时订单",
+    npc: "赶考书生",
+    paperType: "半熟宣",
+    requirements: { evenness: 80, durability: 78, toughness: 75 },
+    reward: { gold: 150, reputation: 18 },
+    timeLimit: 30,
+    unlockRep: 45,
+    dialogue: '明日便要赴京赶考，急需一批试卷用纸！拜托您快些！',
+    scienceTip: '宣纸的"均匀度"取决于抄纸时纸浆在竹帘上的分布是否均匀。造纸工匠全凭手腕控制竹帘入水的角度和力度，让纤维在帘面上交错重叠，形成厚薄一致的纸胎。'
+  },
+  {
+    id: "timedTeaMaster",
+    name: "限时订单",
+    npc: "日本茶人铃木",
+    paperType: "生宣",
+    requirements: { ink: 82, toughness: 80, whiteness: 78 },
+    reward: { gold: 170, reputation: 20 },
+    timeLimit: 35,
+    unlockRep: 50,
+    dialogue: '在下仰慕中国宣纸已久，想带一批回京都与茶友分享。请多关照！',
+    scienceTip: '宣纸在日本被称为"画仙纸"，深受日本书道界推崇。唐代时中国造纸术传入日本，日本在和纸的基础上发展出了自己的造纸体系。但宣纸因青檀皮原料独特，至今仍是书画用纸中的上品。'
+  },
+
+  // ---- 定制订单（完成纸境千年问答后解锁） ----
+  {
+    id: "customPorcelain",
+    name: "定制订单",
+    npc: "瓷器商人白老爷",
+    paperType: "半熟宣",
+    requirements: { evenness: 82, durability: 80, toughness: 78 },
+    reward: { gold: 250, reputation: 35 },
+    timeLimit: null,
+    unlockRep: 55,
+    dialogue: '我新进了一批青花瓷，想画几幅宣纸上的"青花图"配在一起陈列。您说用什么纸好？',
+    scienceTip: '青花瓷的蓝色来自钴料，而中国画中的"墨分五色"——焦、浓、重、淡、清——靠的是水和墨在宣纸上的渗化。瓷与纸，一刚一柔，都是中国美学的载体。'
+  },
+  {
+    id: "customPoet",
+    name: "定制订单",
+    npc: "流浪诗人柳生",
+    paperType: "生宣",
+    requirements: { ink: 85, evenness: 80, toughness: 75 },
+    reward: { gold: 300, reputation: 40 },
+    timeLimit: null,
+    unlockRep: 60,
+    dialogue: '在下云游四海，每到一处便写诗记之。想买一种"让墨能自由奔跑"的纸。',
+    scienceTip: '墨在宣纸上"跑"的过程，本质是液体在毛细管中的渗吸现象。生宣纤维间的微小孔隙形成天然"墨道"，墨汁沿纤维方向扩散，产生浓淡、干湿、虚实的丰富变化——这就是"墨韵"。'
+  }
+];
+
+// ========================================
+// 12张科普卡 — 覆盖原料、工艺、纸性、历史
+// ========================================
 const cardData = [
   {
     id: "青檀树皮",
     icon: "icon-bark",
     title: "青檀树皮",
-    text: "青檀树皮中的韧皮纤维较长，是宣纸具有较好韧性和耐久性的重要原因之一。"
+    text: "青檀树皮中的韧皮纤维较长，是宣纸具有较好韧性和耐久性的重要原因之一。青檀是中国特有树种，主要分布在皖南山区。树皮采割后还需经过蒸煮、漂洗、晒干等多道工序才能用于造纸。"
+  },
+  {
+    id: "沙田稻草",
+    icon: "icon-straw",
+    title: "沙田稻草",
+    text: "泾县特有的沙田稻草是宣纸的另一种重要原料。沙田稻草纤维较短，与青檀皮纤维交织，形成宣纸均匀细密的纸面结构。两种纤维的比例决定了纸张的最终性能。"
   },
   {
     id: "抄纸手法",
     icon: "icon-scoop",
     title: "抄纸手法",
-    text: "抄纸时纸浆在竹帘上的分布是否均匀，会影响纸张厚薄、纹理和书写效果。"
+    text: "抄纸时纸浆在竹帘上的分布是否均匀，会影响纸张厚薄、纹理和书写效果。工匠双手持竹帘框，以特定角度入水、振动、出水，全凭手感控制纸浆分布。一张好纸的背后是数万次的练习。"
+  },
+  {
+    id: "晒纸工艺",
+    icon: "icon-sun",
+    title: "晒纸工艺",
+    text: "湿纸需要在晒纸场上自然晾晒或烤干。传统晒纸使用焙笼（加热的弧形墙面），将湿纸一张张贴在焙笼上烘干。晒纸的温度、湿度、时间都会影响纸张的最终平整度和韧性。"
   },
   {
     id: "吸墨性",
     icon: "icon-ink",
     title: "吸墨性",
-    text: "宣纸的吸墨效果与纤维结构、纸张孔隙和打浆程度有关。好的宣纸不是单纯吸水快，而是能让墨色自然渗化。"
+    text: "宣纸的吸墨效果与纤维结构、纸张孔隙和打浆程度有关。好的宣纸不是单纯吸水快，而是能让墨色自然渗化，在纸面产生浓淡、干湿、虚实的丰富变化——这就是'墨韵'。"
+  },
+  {
+    id: "纸寿千年",
+    icon: "icon-clock",
+    title: "纸寿千年",
+    text: "宣纸有'千年寿纸'的美誉。唐代写经纸、宋代书画纸至今仍保存完好，就是因为宣纸原料富含纤维素、制浆采用碱性工艺，纸张不易酸化老化。一张好的宣纸可以保存超过一千年。"
+  },
+  {
+    id: "生宣与熟宣",
+    icon: "icon-toggle",
+    title: "生宣与熟宣",
+    text: "生宣不经过胶矾加工，吸水快、洇墨明显，适合写意和泼墨。熟宣经过胶矾处理，吸水慢、线条稳，适合工笔和小楷。半熟宣介于两者之间，是新手入门和花鸟画的好选择。"
+  },
+  {
+    id: "七十二道工序",
+    icon: "icon-gear",
+    title: "七十二道工序",
+    text: "宣纸制作有'七十二道工序'之说。从原料采集到成品出纸，要经历蒸煮、漂洗、打浆、捞纸、晒纸、剪纸等上百个步骤，历时近一年。每一张宣纸都是时间、手艺和自然的结晶。"
+  },
+  {
+    id: "泾县宣纸",
+    icon: "icon-map",
+    title: "泾县宣纸",
+    text: "安徽泾县是宣纸的原产地和核心产区。这里的气候、水质、原料都适合宣纸制作。泾县宣纸始于唐代，至今已有1000多年的历史，2006年被列入第一批国家级非物质文化遗产名录。"
+  },
+  {
+    id: "墨分五色",
+    icon: "icon-palette",
+    title: "墨分五色",
+    text: "中国画讲究'墨分五色'——焦、浓、重、淡、清。在宣纸上，通过控制墨的水分和笔触力度，可以在一笔之间产生从浓到淡的渐变。这种效果是宣纸独特的纤维结构和吸墨性带来的。"
+  },
+  {
+    id: "非遗传承",
+    icon: "icon-heritage",
+    title: "非遗传承",
+    text: "宣纸制作技艺于2006年入选第一批国家级非物质文化遗产名录。如今仍有匠人坚守传统手工造纸。捞纸、晒纸等环节需要长期练习，许多判断依赖经验与手感。"
+  },
+  {
+    id: "书画同源",
+    icon: "icon-brushpen",
+    title: "书画同源",
+    text: "中国自古有'书画同源'之说。书法和绘画使用相同的工具——毛笔、墨、宣纸。宣纸的诞生让中国书画艺术有了独特的载体，墨在纸上的渗化效果是其他纸张无法替代的。"
   }
 ];
+
+// 《纸谱十二笺》：主线把科普放回到“帮人用对纸”的过程里。
+const STORY_ASSETS = Object.freeze({
+  paperSlip: "assets/story/paper-slip.png",
+  paperCodexBook: "assets/story/paper-codex-book.png",
+  grandmaNote: "assets/story/grandma-note.png",
+  qingtanBark: "assets/story/qingtan-bark.png",
+  riceStraw: "assets/story/rice-straw.png",
+  bambooScreen: "assets/story/bamboo-screen-paper.png",
+  dryingWall: "assets/story/drying-paper-wall.png",
+  inkSpread: "assets/story/ink-spread.png",
+  glueAlum: "assets/story/glue-alum-bowl.png",
+  museumDisplay: "assets/story/museum-display-lit.png",
+  paperFlake: "assets/story/paper-flake.png",
+  lockedSlip: "assets/story/paper-slip-locked.png"
+});
+
+const PAPER_SLIPS = Object.freeze([
+  { id: "qingtan-bark", title: "青檀为骨", subtitle: "长纤维撑起纸的筋骨", icon: "qingtanBark", shortText: "青檀皮纤维较长，是宣纸韧性、拉力和耐久性的重要来源。", longText: "宣纸以青檀皮和沙田稻草为主要原料。青檀皮的韧皮纤维较长，能为纸张带来较好的拉力与韧性，也是其耐久性的重要原因之一。", unlockBy: "在青檀林回答装裱用纸的判断题", relatedLocation: "青檀林入口", question: "装裱匠人最看重宣纸的哪项性能？", options: ["香味", "韧性和耐久", "颜色越白越好"], answer: "韧性和耐久", wrongHint: "装裱要经受湿润、托裱与时间，纸的筋骨比香味更重要。", rewardText: "纸谱残页归位：青檀为骨" },
+  { id: "rice-straw", title: "稻草为肌", subtitle: "短纤维织出细密纸面", icon: "riceStraw", shortText: "沙田稻草纤维较短，与青檀皮交织，有助于纸面细密、均匀。", longText: "沙田稻草纤维相对较短，与青檀皮纤维搭配后能帮助纸浆在帘面上形成较均匀、细密的结构。原料配比会影响纸张的纸面与使用感受。", unlockBy: "在水车旁回答稻草纸性判断题", relatedLocation: "水车", question: "沙田稻草主要帮助纸张形成什么特点？", options: ["更均匀细密的纸面", "更浓的香气", "更鲜艳的颜色"], answer: "更均匀细密的纸面", wrongHint: "想想短纤维在纸浆里能怎样填补纸面。", rewardText: "纸谱残页归位：稻草为肌" },
+  { id: "bamboo-screen", title: "一帘成纸", subtitle: "稳住竹帘，稳住纸面", icon: "bambooScreen", shortText: "纸浆在竹帘上分布越均匀，纸张厚薄和纹理越稳定。", longText: "抄纸时，工匠以竹帘从纸浆中捞起纤维。入水的角度、提帘的力度和手腕的节奏，都会影响纤维在帘面上的分布，进而影响纸张厚薄与纹理。", unlockBy: "完成一次工坊制纸", relatedLocation: "宣纸工坊区", question: "竹帘上的纸浆最需要保持什么？", options: ["均匀分布", "越厚越好", "颜色越白越好"], answer: "均匀分布", wrongHint: "纸面稳定，先要让纤维在帘上铺得匀。", rewardText: "纸谱残页归位：一帘成纸" },
+  { id: "drying", title: "晒纸定形", subtitle: "干燥决定平整与韧性", icon: "dryingWall", shortText: "晒纸或烘干会影响纸张平整度、韧性和后续书画表现。", longText: "湿纸在晒纸场或焙干过程中逐渐定形。温度、湿度与时间都要合适；干燥不匀可能影响纸面平整与韧性，也会影响后续书写、绘画的手感。", unlockBy: "完成一次晒纸场任务", relatedLocation: "晒纸场", question: "晒纸主要影响纸张的什么？", options: ["平整度和韧性", "纸的香味", "笔的颜色"], answer: "平整度和韧性", wrongHint: "湿纸变成可用的纸，关键在于干燥后的纸面状态。", rewardText: "纸谱残页归位：晒纸定形" },
+  { id: "ink-door", title: "墨韵之门", subtitle: "让墨在纸上自然行走", icon: "inkSpread", shortText: "生宣吸水、渗化较强，适合表现书法和写意画的墨色变化。", longText: "宣纸的吸墨表现和纤维结构、孔隙、打浆程度等有关。生宣未经胶矾处理，渗化相对较强，常用于需要浓淡、干湿、虚实变化的书法与写意画。", unlockBy: "帮王大爷选择行草用纸", relatedLocation: "宣纸铺 / 书画铺", question: "王大爷写行草，想让墨色有浓淡变化，应该推荐哪种纸？", options: ["生宣", "熟宣", "粉蜡笺"], answer: "生宣", wrongHint: "行草要的是墨气活，不是把线条完全锁住。", rewardText: "纸谱残页归位：墨韵之门" },
+  { id: "glue-alum", title: "胶矾定性", subtitle: "让线条更容易站稳", icon: "glueAlum", shortText: "熟宣经胶矾等加工，渗化减弱，适合工笔勾线和反复设色。", longText: "熟宣在原纸基础上经过胶矾等处理，水墨渗化会减弱，线条和设色更容易控制。因此它常被用于工笔勾线、小楷或需要反复设色的绘画。", unlockBy: "完成宫廷画师的工笔订单", relatedLocation: "书画铺", question: "工笔画师要反复设色、线条清楚，应该选哪种纸？", options: ["生宣", "熟宣", "洒金宣"], answer: "熟宣", wrongHint: "工笔需要可控性，想想哪种纸处理后更不易洇开。", rewardText: "纸谱残页归位：胶矾定性" },
+  { id: "half-cooked", title: "半生半熟", subtitle: "在墨韵与控制之间", icon: "paperSlip", shortText: "半熟宣纸性介于生宣和熟宣之间，兼具一定墨韵和可控性。", longText: "半熟宣常指纸性介于生宣与熟宣之间的纸。它保留一些水墨渗化效果，同时又比生宣更容易控制，适合希望有墨韵又不想洇得太开的使用场景。", unlockBy: "完成李姐的花鸟小写意订单", relatedLocation: "书画铺", question: "花鸟小写意想留一点墨韵，又怕洇太开，应该选什么？", options: ["半熟宣", "熟宣", "粉蜡笺"], answer: "半熟宣", wrongHint: "这位画师要的是两种纸性之间的平衡。", rewardText: "纸谱残页归位：半生半熟" },
+  { id: "millennium", title: "纸寿千年", subtitle: "一张纸也能陪书画很久", icon: "paperSlip", shortText: "宣纸绵韧耐久，适合书画保存、装裱和修复等用途。", longText: "宣纸因原料和传统制浆工艺等因素，具有较好的绵韧与耐久性。它适合书画装裱、修复和长期保存，但保存环境仍需注意湿度、光照与虫害。", unlockBy: "完成装裱匠人订单", relatedLocation: "书画铺 / 非遗馆", question: "托裱用纸最重要的品质是什么？", options: ["韧性和耐久", "金色装饰", "强烈香气"], answer: "韧性和耐久", wrongHint: "装裱是为了保护书画，纸需要经得住湿润与时间。", rewardText: "纸谱残页归位：纸寿千年" },
+  { id: "crafts", title: "百工成纸", subtitle: "好纸离不开人的手感", icon: "paperSlip", shortText: "传统宣纸制作有多道手工工序，许多环节依赖工匠经验。", longText: "从制料、制浆到捞纸、晒纸、剪纸，传统宣纸制作包含多道工序。机器能提供辅助，但纸浆状态、提帘节奏和干燥判断等环节仍高度依赖人的经验与手感。", unlockBy: "完成集市匠人摊问答", relatedLocation: "纸境千年集市", question: "为什么传统宣纸制作不能只靠机器完全替代？", options: ["颜色越手工越白", "抄纸、晒纸等依赖经验和手感", "机器不能切纸"], answer: "抄纸、晒纸等依赖经验和手感", wrongHint: "重点不在机器会不会做动作，而在细微状态如何判断。", rewardText: "纸谱残页归位：百工成纸" },
+  { id: "wax", title: "粉蜡细线", subtitle: "细腻纸面承住小楷", icon: "paperSlip", shortText: "粉蜡笺纸面细腻平滑，适合小楷和精细线条表现。", longText: "粉蜡笺通常经过填粉、涂蜡、砑光等处理，纸面较细腻平滑。它适合小楷、细线描绘等需要稳定线条的场景，使用时也要根据笔墨习惯调整。", unlockBy: "完成集市书画摊问答", relatedLocation: "纸境千年集市", question: "小楷需要线条稳定、纸面细腻，应选哪种纸？", options: ["生宣", "粉蜡笺", "洒金宣"], answer: "粉蜡笺", wrongHint: "小楷强调线条细稳，装饰感不是第一需要。", rewardText: "纸谱残页归位：粉蜡细线" },
+  { id: "gold", title: "洒金入笺", subtitle: "把节令心意洒进纸面", icon: "paperSlip", shortText: "洒金宣纸面带装饰性金屑，适合礼品、题跋和雅致册页。", longText: "洒金宣会在纸面加入装饰性的金屑或金片，视觉效果华丽而雅致。它常用于题跋、册页、礼品与节令场景，重点是装饰性，而非替代普通书画用纸。", unlockBy: "完成集市文创摊问答", relatedLocation: "纸境千年集市", question: "想做有节日感的题字礼品，哪种纸更合适？", options: ["生宣", "熟宣", "洒金宣"], answer: "洒金宣", wrongHint: "这位客人要的是礼品的雅致与装饰感。", rewardText: "纸谱残页归位：洒金入笺" },
+  { id: "zhuchui", title: "煮硾练纸", subtitle: "捶压让纸面更紧实", icon: "paperSlip", shortText: "煮硾宣经蒸煮、捶压等加工，纸面更紧实，吸水速度会降低。", longText: "煮硾宣通过润纸、蒸煮、捶压与压实等加工，让纤维结构更紧密。这样会改变纸面的吸水与渗化表现，使其更适合需要较稳纸性的使用场景。", unlockBy: "完成集市工艺摊问答", relatedLocation: "纸境千年集市", question: "不用重胶重矾，靠捶压让纸面更紧实的工艺是什么？", options: ["洒金", "煮硾", "染色"], answer: "煮硾", wrongHint: "题目说的是蒸煮、捶压与压实，不是装饰工艺。", rewardText: "纸谱残页归位：煮硾练纸" }
+]);
+
+const STORY_CHOICE_CASES = Object.freeze({
+  ink: "ink-door",
+  qingtan: "qingtan-bark",
+  rice: "rice-straw"
+});
+
+// 七张纸页是本次游玩的轻量主线：不写入本地存档，刷新后从头开始。
+const PAPER_PAGES = Object.freeze({
+  qingtan: { title: "青檀纸页", asset: "assets/story/paper-page-qingtan.png", text: "青檀皮是宣纸重要原料之一。合理保护原料林，才能让手艺长期延续。", hint: "去青檀林入口，听护林老人讲一片林的来处。" },
+  straw: { title: "稻草纸页", asset: "assets/story/paper-page-straw.png", text: "沙田稻草经处理后参与制浆，影响纸张的纸面与使用表现。", hint: "去集市，帮游客看懂一张纸背后的原料。" },
+  water: { title: "水纹纸页", asset: "assets/story/paper-page-water.png", text: "纤维在水中分散得更均匀，有助于纸张厚薄和纸面更稳定。", hint: "去水车旁，帮师傅恢复纸浆的水路。" },
+  craft: { title: "工艺纸页", asset: "assets/story/paper-page-craft.png", text: "原料加工、制浆、捞纸、晒纸、剪纸等环节都会影响成纸质量。", hint: "去工坊，让学徒明白每一道工序的意义。" },
+  drying: { title: "晒纸纸页", asset: "assets/story/paper-page-drying.png", text: "晒纸与干燥会影响纸张的平整度、质感和后续整理效果。", hint: "去晒纸场，帮老人找出状态刚好的纸。" },
+  paperNature: { title: "纸性纸页", asset: "assets/story/paper-page-nature.png", text: "生宣、熟宣、半熟宣的纸性不同，适合承接不同的笔墨与设色。", hint: "打开外婆的旧账本，替不同的用纸人配纸。" },
+  heritage: { title: "传承纸页", asset: "assets/story/paper-page-heritage.png", text: "非遗保护不只在展柜里，也在原料保护、技艺传承与持续使用中。", hint: "让前六张纸页归位后，前往非遗馆。" }
+});
+
+const quests = Object.freeze({
+  paperShop: { id: "paperShop", page: "paperNature", title: "外婆的旧账本", npc: "外婆", before: "纸不是摆在架上等人买的。先懂它要承接什么样的墨。", after: "你已经能替一张纸说话了。", question: "王大爷写行草，想让墨色有变化，应该先看重哪种纸性？", options: ["生宣", "熟宣", "粉蜡笺"], answer: "生宣", reason: "生宣吸水、渗化较强，更适合表现行草和写意中的墨色变化。" },
+  marketPainter: { id: "marketPainter", page: "paperNature", title: "买错纸的小画师", npc: "小画师", before: "我的花瓣边缘怎么一下全晕开了？", after: "下次画工笔，我会记得选更容易控制的纸。", question: "观察到生宣标签和扩散墨迹后，最可能的原因是？", options: ["你用的是生宣，吸水渗化较强", "毛笔坏了", "墨太浓"], answer: "你用的是生宣，吸水渗化较强", reason: "细线与设色需要更可控的纸性；熟宣经胶矾等加工，渗化减弱。" },
+  marketTourist: { id: "marketTourist", page: "straw", title: "一张纸为什么珍贵", npc: "游客", before: "不就是一张纸吗，为什么这么贵？", after: "原来我买到的是地方原料、时间和手艺。", question: "哪一组线索最能说明宣纸背后的成本？", options: ["青檀皮、稻草、捞纸手感", "更亮的包装", "更大的招牌"], answer: "青檀皮、稻草、捞纸手感", reason: "宣纸的价值来自地方原料、处理时间与手工经验，而不只是成品纸张。" },
+  forest: { id: "forest", page: "qingtan", title: "不能随便砍的树", npc: "护林老人", before: "林子不是仓库，不能只取不养。", after: "你记住了，宣纸的根在山里。", question: "订单多时，为什么也不能过度采剥青檀皮？", options: ["会影响原料林恢复与长期利用", "树皮越多纸一定越好", "只要有稻草就行"], answer: "会影响原料林恢复与长期利用", reason: "青檀皮是重要原料之一，原料保护与可持续利用同样属于传承。" },
+  waterwheel: { id: "waterwheel", page: "water", title: "水车停了", npc: "工坊师傅", before: "水路不顺，纸浆就难分得匀。", after: "你手里拿的不是纸浆，是时间。", question: "修好水车后，纸浆在水里最需要达到什么状态？", options: ["纤维分散均匀", "越稠越好", "颜色越深越好"], answer: "纤维分散均匀", reason: "纸浆分布是否均匀，会影响纸张厚薄、均匀度和成纸质量。" },
+  workshopProcess: { id: "workshopProcess", page: "craft", title: "纸不是赶出来的", npc: "工坊师傅", before: "你看到的是最后几步，看不到的是前面的时间。", after: "每一道工序，都在替下一道工序铺路。", question: "请先点出制纸流程的第一步。", options: ["皮料加工", "捞纸", "晒纸"], answer: "皮料加工", reason: "原料处理、制浆、捞纸、晒纸、剪纸等环节相互关联，不能只看最后的捞纸。" },
+  dryingYard: { id: "dryingYard", page: "drying", title: "纸晒到刚好", npc: "晒纸老人", before: "什么时候揭、什么时候整，都要靠眼力。", after: "能看懂纸的干湿，才算入门。", question: "哪一种状态最适合继续整纸？", options: ["刚好", "太湿", "过干起皱"], answer: "刚好", reason: "晒纸与干燥会影响纸张平整度和质感，需要根据纸的状态判断时机。" },
+  museum: { id: "museum", page: "heritage", title: "七页点亮展柜", npc: "非遗馆馆长", before: "展柜里放的是物，故事要靠人讲。", after: "老街亮了，纸也有了声音。", question: "非遗传承除了展示，还要做什么？", options: ["保护原料、传承技艺并持续使用", "只把旧物锁起来", "只办一次展览"], answer: "保护原料、传承技艺并持续使用", reason: "非遗保护包括原料保护、技艺传承、活态使用与文化传播。" }
+});
 
 const introScreen = document.querySelector("#introScreen");
 const gameScreen = document.querySelector("#gameScreen");
@@ -224,7 +586,76 @@ const joystickStick = document.querySelector("#joystickStick");
 const toast = document.querySelector("#toast");
 const coinText = document.querySelector("#coinText");
 const reputationText = document.querySelector("#reputationText");
-const taskText = document.querySelector("#taskText");
+const taskSteps = document.querySelector("#taskSteps");
+const paperPagesButton = document.querySelector("#paperPagesButton");
+
+function paperPageCount() {
+  return Object.values(state.paperPages).filter(Boolean).length;
+}
+
+function completeQuest(questId) {
+  const quest = quests[questId];
+  if (!quest || state.completedQuests.has(questId)) return false;
+  state.completedQuests.add(questId);
+  state.paperPages[quest.page] = true;
+  state.coins += 15;
+  updateHud();
+  showToast(`纸页归位：${PAPER_PAGES[quest.page].title}`);
+  return true;
+}
+
+function openQuest(questId, feedback = "") {
+  const quest = quests[questId];
+  if (!quest) return;
+  if (state.completedQuests.has(questId)) {
+    openModal(`
+      <section class="story-choice-card"><p class="story-choice-kicker">纸境千年 · 老街回音</p><h2>${quest.title}</h2><blockquote>${quest.after}</blockquote><button class="primary-btn" type="button" data-action="close">继续探索</button></section>
+    `, "modal", "story-choice-modal");
+    return;
+  }
+  const options = quest.options.map((option) => `<button class="story-choice-option" type="button" data-action="answerQuest" data-quest-id="${questId}" data-option="${option}">${option}</button>`).join("");
+  openModal(`
+    <section class="story-choice-card" aria-labelledby="questTitle">
+      <p class="story-choice-kicker">${quest.npc} · 老街事件</p>
+      <h2 id="questTitle">${quest.title}</h2>
+      <blockquote>${quest.before}</blockquote>
+      <p class="story-choice-question">${quest.question}</p>
+      ${feedback ? `<p class="story-choice-hint">${feedback}</p>` : ""}
+      <div class="story-choice-options">${options}</div>
+      <button class="festival-text-btn" type="button" data-action="close">稍后再想</button>
+    </section>
+  `, "modal", "story-choice-modal");
+}
+
+function answerQuest(questId, option) {
+  const quest = quests[questId];
+  if (!quest) return;
+  if (option !== quest.answer) {
+    openQuest(questId, "再观察一下线索：这件事和纸的原料、纸性或工艺状态有关。 ");
+    return;
+  }
+  const firstCompletion = completeQuest(questId);
+  if (!firstCompletion) return openQuest(questId);
+  if (questId === "museum" && paperPageCount() === 7) {
+    openModal(`
+      <section class="story-finale"><img src="assets/story/ui-paper-codex-panel.png" alt="" onerror="this.onerror=null;this.hidden=true"><p>纸境千年 · 纸页已归位</p><h2>七张纸页，唤醒老街</h2><blockquote>馆长说：‘你带回来的不是答案，是老街重新连起来的证据。’<br><br>外婆轻声道：‘宣纸是一片林、一条水、一双手，也是一代人传给下一代人的记忆。’</blockquote><div class="reward-items"><span>非遗馆展柜全部点亮</span><span>纸页 7 / 7</span></div><button class="primary-btn" type="button" data-action="openPaperPagesCodex">查看完整纸页图鉴</button></section>
+    `, "modal", "story-finale-modal");
+    return;
+  }
+  openModal(`
+    <section class="paper-slip-reward-card"><img class="paper-slip-icon" src="${PAPER_PAGES[quest.page].asset}" alt="" onerror="this.onerror=null;this.hidden=true"><p class="paper-slip-kicker">七张纸页 · 老街苏醒</p><h2>纸页归位</h2><h3>${PAPER_PAGES[quest.page].title}</h3><p>${quest.reason}</p><div class="modal-actions"><button class="primary-btn" type="button" data-action="close">收进图鉴</button><button class="secondary-btn" type="button" data-action="openPaperPagesCodex">查看纸页</button></div></section>
+  `, "modal", "paper-slip-reward-modal");
+}
+
+function openPaperPagesCodex() {
+  const cards = Object.entries(PAPER_PAGES).map(([id, page]) => {
+    const unlocked = state.paperPages[id];
+    return `<article class="paper-codex-card ${unlocked ? "is-unlocked" : "paper-codex-locked"}"><img src="${page.asset}" alt="" onerror="this.onerror=null;this.hidden=true"><div><small>${unlocked ? "已归位" : "纸页尚未归位"}</small><h3>${unlocked ? page.title : "？？？"}</h3><p>${unlocked ? page.text : `线索：${page.hint}`}</p></div></article>`;
+  }).join("");
+  openModal(`
+    <section class="paper-codex-panel" aria-labelledby="sevenPageTitle"><header class="paper-codex-header"><img src="assets/story/ui-paper-codex-panel.png" alt="" onerror="this.onerror=null;this.hidden=true"><div><p>外婆留下的《千年纸谱》</p><h2 id="sevenPageTitle">七张纸页</h2><span>纸页：<b>${paperPageCount()} / 7</b></span></div></header><p class="paper-codex-intro">本次游玩中，每帮一位老街的人解决一个与宣纸有关的小麻烦，就有一张纸页归位。</p><p class="paper-codex-session-state">本局进度仅在当前页面有效；刷新或重新打开游戏后会从头开始。</p><div class="paper-codex-grid">${cards}</div><div class="modal-actions"><button class="secondary-btn" type="button" data-action="openPaperCodex">查看纸谱十二笺</button>${closeBtn("返回老街")}</div></section>
+  `, "modal", "paper-codex-modal");
+}
 
 function scaleRect(rect) {
   return {
@@ -285,13 +716,16 @@ function collidesAt(x, y) {
 function startGame() {
   if (state.gameState !== "start") return;
   hideStartScreen();
-  showToast("去工坊制作第一张宣纸。按 F2 可显示坐标调试层。");
+  showToast("按 F2 可显示坐标调试层。");
 }
 
 function showStartScreen() {
   state.gameState = "start";
   state.introActive = true;
   state.modalOpen = false;
+  state.pageStack = [];
+  state.currentPage = "map";
+  state.currentPageOptions = null;
   state.keys.clear();
   hideVirtualControls();
   modalLayer.classList.add("hidden");
@@ -308,6 +742,9 @@ function showStartScreen() {
 function hideStartScreen() {
   state.gameState = "playing";
   state.introActive = false;
+  state.pageStack = [];
+  state.currentPage = "map";
+  state.currentPageOptions = null;
   state.keys.clear();
   introScreen.classList.add("hidden");
   gameScreen.classList.remove("hidden");
@@ -389,28 +826,236 @@ function hideVirtualControls() {
   resetJoystick();
 }
 
-function openPauseMenu() {
-  if (state.gameState !== "playing") return;
-  state.gameState = "paused";
+function syncPageUi() {
+  updateHud();
   state.keys.clear();
-  interactionPrompt.classList.add("hidden");
-  pauseLayer.classList.remove("hidden");
+  interactionPrompt.classList.toggle("hidden", state.gameState !== "playing");
+  if (state.gameState === "playing") updateMap();
   updateMobileControls();
 }
 
+function renderPage(pageName, options = {}) {
+  const isPause = options.type === "pause" || pageName === "pause";
+  if (pageName === "map") {
+    state.gameState = "playing";
+    state.modalOpen = false;
+    state.miniGame = null;
+    modalLayer.classList.add("hidden");
+    modalCard.className = "modal-card";
+    modalCard.innerHTML = "";
+    pauseLayer.classList.add("hidden");
+  } else if (isPause) {
+    state.gameState = "paused";
+    state.modalOpen = false;
+    modalLayer.classList.add("hidden");
+    pauseLayer.classList.remove("hidden");
+  } else {
+    state.gameState = options.nextState || "modal";
+    state.modalOpen = true;
+    pauseLayer.classList.add("hidden");
+    modalCard.className = `modal-card${options.cardClass ? ` ${options.cardClass}` : ""}`;
+    modalCard.innerHTML = options.html || "";
+    modalLayer.classList.remove("hidden");
+  }
+  syncPageUi();
+}
+
+// 所有 UI 页面都从此处进入；栈内保存的是可重新渲染的页面描述，而不是 DOM 引用。
+function openPage(pageName, options = {}) {
+  const nextOptions = { ...options };
+  const replaceCurrent = Boolean(nextOptions.replace) || state.currentPage === pageName;
+  if (!replaceCurrent) {
+    state.pageStack.push({
+      pageName: state.currentPage,
+      options: state.currentPageOptions ? { ...state.currentPageOptions } : {}
+    });
+  }
+  state.currentPage = pageName;
+  state.currentPageOptions = nextOptions;
+  renderPage(pageName, nextOptions);
+}
+
+// 当前页优先退出，随后恢复栈顶页面；没有历史时才回到主地图。
+function goBackPage() {
+  const previous = state.pageStack.pop();
+  if (previous) {
+    state.currentPage = previous.pageName;
+    state.currentPageOptions = previous.options || null;
+    renderPage(previous.pageName, previous.options);
+    return true;
+  }
+  if (state.currentPage !== "map") {
+    state.currentPage = "map";
+    state.currentPageOptions = null;
+    renderPage("map");
+    return true;
+  }
+  return false;
+}
+
+function openPauseMenu() {
+  if (state.gameState !== "playing") return;
+  openPage("pause", { type: "pause" });
+}
+
 function closePauseMenu() {
-  if (state.gameState !== "paused") return;
-  state.gameState = "playing";
-  pauseLayer.classList.add("hidden");
-  state.keys.clear();
-  updateMap();
-  updateMobileControls();
+  if (state.currentPage !== "pause") return;
+  goBackPage();
+}
+
+function getPaperSlip(id) {
+  return PAPER_SLIPS.find((slip) => slip.id === id);
+}
+
+function getStoryChapterTitle() {
+  return ({
+    1: "第一章：一张纸的脾气",
+    2: "第二章：一张纸的骨肉",
+    3: "第三章：一张纸的手艺",
+    4: "第四章：一张纸的去处"
+  })[state.storyChapter] || "纸境千年";
+}
+
+function paperSlipCount() {
+  return state.unlockedKnowledgeCards.size;
+}
+
+function unlockPaperSlip(id) {
+  const slip = getPaperSlip(id);
+  if (!slip || state.unlockedKnowledgeCards.has(id)) return false;
+  state.unlockedKnowledgeCards.add(id);
+  const legacyCard = {
+    "qingtan-bark": "青檀树皮", "rice-straw": "沙田稻草", "bamboo-screen": "抄纸手法",
+    drying: "晒纸工艺", "ink-door": "吸墨性", "glue-alum": "生宣与熟宣",
+    "half-cooked": "生宣与熟宣", millennium: "纸寿千年", crafts: "七十二道工序",
+    wax: "生宣与熟宣", gold: "墨分五色", zhuchui: "七十二道工序"
+  }[id];
+  if (legacyCard) state.unlockedCards.add(legacyCard);
+  showToast(`纸谱残页归位：${slip.title}`);
+  updateStoryTask();
+  return true;
+}
+
+function openPaperSlipReward(slipId, afterAction = "close") {
+  const slip = getPaperSlip(slipId);
+  if (!slip) return;
+  unlockPaperSlip(slipId);
+  const chapterEvent = checkStoryProgress();
+  if (chapterEvent) {
+    openModal(chapterEvent, "modal", "story-chapter-modal");
+    return;
+  }
+  openModal(`
+    <section class="paper-slip-reward-card" aria-labelledby="paperSlipRewardTitle">
+      <div class="paper-flake-burst" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+      <img class="paper-slip-icon" src="${STORY_ASSETS[slip.icon] || STORY_ASSETS.paperSlip}" alt="" onerror="this.onerror=null;this.hidden=true">
+      <p class="paper-slip-kicker">《纸谱十二笺》</p>
+      <h2 id="paperSlipRewardTitle">纸谱残页归位</h2>
+      <h3>${slip.title}</h3>
+      <p>${slip.shortText}</p>
+      <div class="modal-actions">
+        <button class="primary-btn" type="button" data-action="${afterAction}">收进纸谱</button>
+        <button class="secondary-btn" type="button" data-action="openPaperCodex">前往非遗馆查看</button>
+      </div>
+    </section>
+  `, "modal", "paper-slip-reward-modal");
+}
+
+function openStoryChoice(caseId, feedback = "") {
+  const slipId = STORY_CHOICE_CASES[caseId] || caseId;
+  const slip = getPaperSlip(slipId);
+  if (!slip) return;
+  const needs = {
+    "ink-door": { title: "王大爷的行草纸", demand: "我要写一幅行草。纸不能太死，墨要能走得开。" },
+    "qingtan-bark": { title: "山里的纸筋骨", demand: "装裱匠人要托一幅旧画，他最看重纸能经得住湿润与时间。" },
+    "rice-straw": { title: "水车旁的纸面", demand: "匠人说，纸不只要韧，也要让纸面细密匀净。" }
+  }[slip.id] || { title: slip.title, demand: slip.unlockBy };
+  const choices = slip.options.map((option) => `<button class="story-choice-option" type="button" data-action="answerStoryChoice" data-slip-id="${slip.id}" data-option="${option}">${option}</button>`).join("");
+  openModal(`
+    <section class="story-choice-card" aria-labelledby="storyChoiceTitle">
+      <p class="story-choice-kicker">纸境千年 · 用纸判断</p>
+      <h2 id="storyChoiceTitle">${needs.title}</h2>
+      <blockquote>${needs.demand}</blockquote>
+      <p class="story-choice-question">${slip.question}</p>
+      ${feedback ? `<p class="story-choice-hint">${feedback}</p>` : ""}
+      <div class="story-choice-options">${choices}</div>
+      <button class="festival-text-btn" type="button" data-action="close">稍后再想</button>
+    </section>
+  `, "modal", "story-choice-modal");
+}
+
+function answerStoryChoice(slipId, option) {
+  const slip = getPaperSlip(slipId);
+  if (!slip) return;
+  if (option !== slip.answer) {
+    openStoryChoice(slipId, `再想想：${slip.wrongHint}`);
+    return;
+  }
+  if (slipId === "ink-door") state.storyMilestones.paperShopExam = true;
+  if (slipId === "qingtan-bark") state.storyMilestones.qingtanVisited = true;
+  if (slipId === "rice-straw") state.storyMilestones.riceVisited = true;
+  if (slipId === "ink-door") completeQuest("paperShop");
+  openPaperSlipReward(slipId);
+}
+
+function updateStoryTask() {
+  updateHud();
+}
+
+function getChapterOneStep() {
+  const m = state.storyMilestones;
+
+  if (!m.grandmaTalked) return "find_grandma";
+  if (!m.paperBookOpened) return "open_paper_book";
+  if (!m.paperShopExam) return "paper_shop_exam";
+  if (!m.workshopMade) return "make_paper";
+  if (state.ordersCompleted < 1) return "deliver_order";
+
+  return "chapter1_done";
 }
 
 function updateHud() {
   coinText.textContent = state.coins;
   reputationText.textContent = state.reputation;
-  taskText.textContent = state.task;
+
+  const ch = state.storyChapter;
+  const steps = [{ text: `▶ ${getStoryChapterTitle()}`, done: false, chapter: true }];
+  if (ch === 1) {
+    const chapterOneMessages = {
+      find_grandma: "→ 纸铺灯还亮着，外婆似乎在等你。",
+      open_paper_book: "→ 打开外婆的纸样册，先认清三种纸性。",
+      paper_shop_exam: "→ 替王大爷判断行草该用哪种纸。",
+      make_paper: "→ 工坊水声未歇，去试着做第一张纸。",
+      deliver_order: "→ 把做好的纸送到书画铺。",
+      chapter1_done: "→ 第一张纸送出去了，老街有了新的传闻。"
+    };
+    const chapterOneStep = getChapterOneStep();
+    steps.push({ text: chapterOneMessages[chapterOneStep], done: chapterOneStep === "chapter1_done" });
+  } else if (ch === 2) {
+    if (!state.storyMilestones.qingtanVisited) steps.push({ text: "→ 去青檀林入口，寻找纸的筋骨", done: false });
+    else if (!state.storyMilestones.riceVisited) steps.push({ text: "→ 去水车旁，了解稻草与纸面的关系", done: false });
+    else if (state.ordersCompleted < 2) steps.push({ text: `→ 完成两个用纸订单，积累老街信任（${state.ordersCompleted}/2）`, done: false });
+  } else if (ch === 3) {
+    if (!state.unlockedKnowledgeCards.has("bamboo-screen")) steps.push({ text: "→ 去工坊完成一次稳定抄纸", done: false });
+    else if (!state.unlockedKnowledgeCards.has("drying")) steps.push({ text: "→ 去晒纸场观察湿纸定形", done: false });
+    else if (!state.unlockedKnowledgeCards.has("crafts")) steps.push({ text: "→ 去集市请教非遗匠人", done: false });
+    else steps.push({ text: `→ 让至少 6 张纸谱残页归位（${paperSlipCount()}/6）`, done: false });
+  } else {
+    if (paperSlipCount() < 12) steps.push({ text: `→ 让十二张纸谱残页全部归位（${paperSlipCount()}/12）`, done: false });
+    else if (festivalProgress() < 4) steps.push({ text: `→ 完成集市四席问答（${festivalProgress()}/4）`, done: false });
+    else if (state.ordersCompleted < 4) steps.push({ text: `→ 完成不同用途的用纸委托（${state.ordersCompleted}/4）`, done: false });
+    else steps.push({ text: "→ 前往非遗馆，准备重新开馆", done: false });
+  }
+  if (state.coins >= 150 && Object.values(state.upgrades).some(v => !v)) {
+    steps.push({ text: '💰 可升级工坊设备', done: false });
+  }
+
+  const stepsHtml = steps.map(s => {
+    if (s.chapter) return `<span class="task-step task-step--active">${s.text}</span>`;
+    return `<span class="task-step ${s.done ? 'task-step--done' : ''}">${s.text}</span>`;
+  }).join('');
+  taskSteps.innerHTML = stepsHtml;
+  if (paperPagesButton) paperPagesButton.textContent = `纸页 ${paperPageCount()} / 7`;
 }
 
 function showToast(message) {
@@ -584,9 +1229,150 @@ function getZoneAtPoint(point) {
 
 function getInteractionPrompt(zone) {
   if (!zone) return "";
-  if (!isMobileInput()) return zone.prompt;
+  if (!isMobileInput()) return `按 ${INTERACT_KEY_LABEL} ${zone.prompt}`;
   if (zone.mobilePrompt) return zone.mobilePrompt;
-  return zone.prompt.replace(/^按 E /, "点击");
+  return zone.prompt;
+}
+
+function getNearbyNpcDialogue() {
+  if (!state.map.ready) return null;
+  let nearest = null;
+  document.querySelectorAll("[data-npc-dialogue]").forEach((npc) => {
+    const id = npc.dataset.npcDialogue;
+    const dialogue = MARKET_NPC_DIALOGUES[id];
+    if (!dialogue) return;
+    const range = (dialogue.interactionRange || NPC_DIALOGUE_RANGE) * Math.max(state.map.scaleX, state.map.scaleY);
+    const x = Number.parseFloat(npc.style.left);
+    const y = Number.parseFloat(npc.style.top);
+    const distance = Math.hypot(state.player.x - x, state.player.y - y);
+    if (distance <= range && (!nearest || distance < nearest.distance)) {
+      nearest = { id, element: npc, distance };
+    }
+  });
+  return nearest;
+}
+
+function updateNpcDialogueBubbles() {
+  const nearby = getNearbyNpcDialogue();
+  state.nearbyNpcDialogueId = nearby?.id || null;
+  document.querySelectorAll("[data-npc-dialogue]").forEach((npc) => {
+    const id = npc.dataset.npcDialogue;
+    const dialogue = MARKET_NPC_DIALOGUES[id];
+    const bubble = npc.querySelector(".npc-dialogue-bubble");
+    if (!dialogue || !bubble) return;
+    const questId = { paperSeller: "marketPainter", craftsperson: "marketPainter", marketVisitor: "marketTourist", forestElder: "forest", workshopMaster: "workshopProcess", dryingElder: "dryingYard", galleryCurator: "museum" }[id];
+    if (id === "grandmother") {
+      bubble.textContent = state.paperPages.paperNature ? "宣屿，你已经能替一张纸说话了。" : "纸要慢慢看，人也要慢慢懂。";
+    } else if (questId && quests[questId]) {
+      bubble.textContent = state.completedQuests.has(questId) ? quests[questId].after : quests[questId].before;
+    } else {
+      const bubbleLines = dialogue.bubbleLines || dialogue.lines;
+      const lineIndex = state.npcDialogueIndex[id] || 0;
+      bubble.textContent = bubbleLines[lineIndex];
+    }
+    npc.classList.toggle("npc-dialogue--nearby", id === state.nearbyNpcDialogueId);
+    bubble.dataset.hint = getNpcInteractionHint(id);
+  });
+  return nearby;
+}
+
+function getNpcInteractionHint(id) {
+  const dialogue = MARKET_NPC_DIALOGUES[id];
+  return `按 ${NPC_INTERACT_KEY_LABEL} ${dialogue?.promptLabel || "对话"}`;
+}
+
+function advanceNpcDialogue(id) {
+  const dialogue = MARKET_NPC_DIALOGUES[id];
+  if (!dialogue) return false;
+  if (id === "marketVisitor") {
+    openQuest("marketTourist");
+    return true;
+  }
+  if (id === "paperSeller" || id === "craftsperson") {
+    openQuest("marketPainter");
+    return true;
+  }
+  if (id === "forestElder") {
+    openQuest("forest");
+    return true;
+  }
+  if (id === "workshopMaster") {
+    if (state.storyChapter === 1) {
+      const step = getChapterOneStep();
+      if (step === "find_grandma") {
+        openModal(`<section class="story-choice-card"><p class="story-choice-kicker">纸境千年 · 工坊提醒</p><h2>先去见外婆</h2><blockquote>外婆还在宣纸铺门口等你。</blockquote>${closeBtn("我先去纸铺")}</section>`, "modal", "story-choice-modal");
+        return true;
+      }
+      if (step === "open_paper_book" || step === "paper_shop_exam") {
+        openModal(`<section class="story-choice-card"><p class="story-choice-kicker">纸境千年 · 工坊提醒</p><h2>先认纸性</h2><blockquote>先认清纸性，再来工坊试纸。</blockquote>${closeBtn("去宣纸铺")}</section>`, "modal", "story-choice-modal");
+        return true;
+      }
+    }
+    openQuest("workshopProcess");
+    return true;
+  }
+  if (id === "dryingElder") {
+    openQuest("dryingYard");
+    return true;
+  }
+  if (id === "galleryCurator") {
+    if (paperPageCount() >= 6) openQuest("museum");
+    else openPaperPagesCodex();
+    return true;
+  }
+  if (dialogue.randomRumors) {
+    openNpcRumorDialogue(id);
+    return true;
+  }
+  if (dialogue.storyLines) {
+    openNpcStoryDialogue(id);
+    return true;
+  }
+  const current = state.npcDialogueIndex[id] || 0;
+  state.npcDialogueIndex[id] = (current + 1) % dialogue.lines.length;
+  updateNpcDialogueBubbles();
+  return true;
+}
+
+function openNpcRumorDialogue(id) {
+  const dialogue = MARKET_NPC_DIALOGUES[id];
+  if (!dialogue?.randomRumors) return;
+  const rumor = dialogue.randomRumors[Math.floor(Math.random() * dialogue.randomRumors.length)];
+  openModal(`
+    <section class="npc-rumor-dialogue" aria-labelledby="npcRumorTitle">
+      <div class="npc-rumor-portrait npc-rumor-portrait--teahouse" aria-hidden="true"></div>
+      <p class="npc-rumor-kicker">茶馆门口 · 老街传闻</p>
+      <h2 id="npcRumorTitle">${dialogue.name}</h2>
+      <blockquote>${rumor}</blockquote>
+      <div class="npc-rumor-actions"><button class="paper-realm-secondary" type="button" data-action="close">继续逛老街</button></div>
+    </section>
+  `, "modal", "npc-rumor-dialogue-card");
+}
+
+function openNpcStoryDialogue(id) {
+  const dialogue = MARKET_NPC_DIALOGUES[id];
+  if (!dialogue?.storyLines) return;
+  const chapterLines = {
+    1: ["宣屿，这间铺子不是缺纸，是缺一个真正懂纸的人。", "先认纸性。写行草的人，要墨气活；画工笔的人，要线条稳。你先从生宣、熟宣、半熟宣认起。"],
+    2: ["光会卖纸还不够。纸有骨肉：青檀是骨，稻草是肌。", "去山里和水车旁看看，知道它们从哪里来，才知道一张纸为什么不一样。"],
+    3: ["手艺不是步骤表。每一帘、每一晒，都要靠人的经验。", "这次不是比快，是比稳。纸浆在竹帘上分布匀，纸面才站得住。"],
+    4: ["纸做出来，是要去到人手里的。有人写，有人画，有人珍藏，纸才算真正活过。", "等十二张纸谱都回来，去非遗馆看看这条老街留下了什么。"]
+  }[state.storyChapter] || dialogue.storyLines;
+  state.storyMilestones.grandmaTalked = true;
+  updateStoryTask();
+  const paragraphs = chapterLines.map((line) => `<p>${line}</p>`).join("");
+  openModal(`
+    <section class="grandmother-dialogue" aria-labelledby="grandmotherDialogueTitle">
+      <div class="grandmother-dialogue-portrait" aria-hidden="true"></div>
+      <p class="grandmother-dialogue-kicker">宣纸铺 · 传承</p>
+      <h2 id="grandmotherDialogueTitle">${dialogue.name}</h2>
+      <div class="grandmother-dialogue-copy">${paragraphs}</div>
+      <div class="grandmother-dialogue-actions">
+        <button class="paper-realm-primary" type="button" data-action="openPaperShop">打开外婆的纸样册</button>
+        <button class="paper-realm-secondary" type="button" data-action="close">稍后再说</button>
+      </div>
+    </section>
+  `, "modal", "grandmother-dialogue-card");
 }
 
 function mapPointFromClient(clientX, clientY) {
@@ -616,7 +1402,13 @@ function updateMap() {
     updateDepthSortedEntities();
 
     state.activeZone = getActiveZone();
-    if (state.activeZone && state.gameState === "playing") {
+    const nearbyNpc = updateNpcDialogueBubbles();
+    if (nearbyNpc && state.gameState === "playing") {
+      interactionPrompt.textContent = isMobileInput()
+        ? `点击${MARKET_NPC_DIALOGUES[nearbyNpc.id]?.name || "NPC"}`
+        : getNpcInteractionHint(nearbyNpc.id);
+      interactionPrompt.classList.remove("hidden");
+    } else if (state.activeZone && state.gameState === "playing") {
       interactionPrompt.textContent = getInteractionPrompt(state.activeZone);
       interactionPrompt.classList.remove("hidden");
     } else {
@@ -662,7 +1454,6 @@ function openComingSoon(zone) {
   openModal(`
     <h2>${zone.name}</h2>
     <p>${zone.name}将在后续版本开放。</p>
-    <p>这里会逐步加入宣纸材料、工艺、人物剧情和经营事件。</p>
     <div class="modal-actions">${closeBtn("返回地图")}</div>
   `);
 }
@@ -671,40 +1462,37 @@ function interact() {
   if (state.gameState !== "playing") return;
   const zone = state.activeZone;
   if (!zone) {
-    showToast(isMobileInput() ? "靠近交互区域后点击。" : "靠近蓝色交互区域后按 E。");
+    showToast(isMobileInput() ? "靠近交互区域后点击。" : `靠近交互区域后按 ${INTERACT_KEY_LABEL}。`);
     return;
   }
   activateZone(zone);
 }
 
 function activateZone(zone) {
-  if (zone.id === "workshop") openWorkshop();
+  if (zone.id === "paperShop") openPaperShop();
+  else if (zone.id === "market") openFestivalEntrance();
+  else if (zone.id === "workshop") openWorkshop();
   else if (zone.id === "calligraphyShop") openArtShop();
   else if (zone.id === "museum") openMuseum();
-  else if (zone.id === "paperShop") openPaperShop();
-  else if (zone.id === "market") openFestivalEntrance();
+  else if (zone.id === "qingtanForest" || zone.id === "qingtanForestTrail") openQuest("forest");
+  else if (zone.id === "waterWheel") openQuest("waterwheel");
+  else if (zone.id === "paperFestival") openPaperFestival();
+  else if (zone.id === "dryingYard" || zone.id.startsWith("dryingRacks")) openDryingYard();
   else openComingSoon(zone);
 }
 
 function openModal(html, nextState = "modal", cardClass = "") {
-  state.gameState = nextState;
-  state.modalOpen = true;
-  modalCard.className = `modal-card${cardClass ? ` ${cardClass}` : ""}`;
-  modalCard.innerHTML = html;
-  modalLayer.classList.remove("hidden");
-  interactionPrompt.classList.add("hidden");
-  updateMobileControls();
+  // 保留原有调用点，实际入口统一转交给页面栈。
+  const pageId = html.match(/aria-labelledby="([^"]+)"/)?.[1];
+  const heading = html.match(/<h[1-3][^>]*>\s*([^<]+)/)?.[1]?.trim();
+  const pageName = pageId
+    ? `${cardClass || "modal"}:${pageId}`
+    : `${cardClass || "modal"}:${heading || "page"}`;
+  openPage(pageName, { type: "modal", html, nextState, cardClass });
 }
 
 function closeModal() {
-  state.modalOpen = false;
-  state.gameState = "playing";
-  modalLayer.classList.add("hidden");
-  modalCard.className = "modal-card";
-  modalCard.innerHTML = "";
-  state.miniGame = null;
-  updateMap();
-  updateMobileControls();
+  if (state.modalOpen || state.currentPage !== "map") goBackPage();
 }
 
 function closeBtn(label, variant = "primary-btn") {
@@ -894,8 +1682,8 @@ function renderPaperBook(paperId = "shengxuan") {
       <header class="paper-showcase-header">
         <p class="paper-showcase-seal">宣纸铺</p>
         <div>
-          <h2 id="paperShowcaseTitle">纸境千年 · 宣纸铺图鉴</h2>
-          <p>从纸性到工艺，读懂一张宣纸的脾气。</p>
+          <h2 id="paperShowcaseTitle">外婆的纸样册</h2>
+          <p>认懂纸性，才算真正走进这条老街。</p>
         </div>
       </header>
 
@@ -924,6 +1712,7 @@ function renderPaperBook(paperId = "shengxuan") {
 
       <footer class="paper-showcase-footer">
         <p>${isProcessedPaper ? "洒金重装饰，煮硾重纸性，粉蜡重细密。" : "生宣重墨韵，熟宣重控制，半熟重平衡。"}</p>
+        ${state.storyChapter === 1 && !state.storyMilestones.paperShopExam ? `<button class="primary-btn" type="button" data-action="openStoryChoice" data-case-id="ink">替王大爷选纸</button>` : ""}
         <button class="catalog-close" type="button" data-action="close">我知道了</button>
       </footer>
     </section>
@@ -932,11 +1721,17 @@ function renderPaperBook(paperId = "shengxuan") {
 
 function openPaperShop(paperId = "shengxuan") {
   const paper = paperBookGroups.flatMap((group) => group.papers).find((item) => item.id === paperId) || paperShowcaseData[0];
+  const firstPaperBookVisit = !state.storyMilestones.paperBookOpened;
   state.hasVisitedPaperShop = true;
   state.unlockedPaperCategories.add(paper.id);
   state.unlockedPaperItems.add(`paper-type:${paper.id}`);
   if (state.paperShopStoryStage === 0) state.paperShopStoryStage = 1;
+  state.storyMilestones.paperBookOpened = true;
+  updateStoryTask();
   renderPaperBook(paper.id);
+  if (firstPaperBookVisit && state.storyChapter === 1 && !state.storyMilestones.paperShopExam) {
+    window.setTimeout(() => openStoryChoice("ink"), 240);
+  }
 }
 
 const festivalTasks = [
@@ -951,7 +1746,7 @@ const festivalTasks = [
     answer: "洒金宣",
     correctText: "选得好！洒金宣纸面有金色点片，装饰感强，适合题字、礼品和节庆场景。",
     hintText: "这张纸也有它的用处，但和这位客人的需求还不太合适。再想想“装饰感”和“礼品感”。",
-    stamp: "金屑映纸"
+    stamp: "金屑映纸", slipId: "gold"
   },
   {
     id: "small-regular-script",
@@ -968,16 +1763,16 @@ const festivalTasks = [
   },
   {
     id: "ink-landscape",
-    stall: "宣纸摊",
-    npc: "画师",
+    stall: "非遗匠人摊",
+    npc: "非遗匠人",
     icon: "paper",
-    brief: "画师要画墨色自然散开的泼墨山水。",
-    dialogue: "我要画一幅泼墨山水，想让墨色自然散开，有浓淡变化。你觉得用哪种纸好？",
-    options: ["生宣", "熟宣", "粉蜡笺"],
-    answer: "生宣",
-    correctText: "选得准！生宣吸水快，洇墨明显，适合写意、泼墨和表现水墨层次。",
-    hintText: "这张纸更适合控制线条，但泼墨山水需要更自然的墨色扩散。再想想哪种纸最容易洇墨。",
-    stamp: "墨韵自然"
+    brief: "匠人想知道你是否理解手工制纸的关键。",
+    dialogue: "为什么传统宣纸制作不能只靠机器完全替代？",
+    options: ["因为颜色越手工越白", "因为抄纸、晒纸等环节高度依赖经验和手感", "因为机器不能切纸"],
+    answer: "因为抄纸、晒纸等环节高度依赖经验和手感",
+    correctText: "答得好。传统工艺的难处，在于纸浆状态、提帘节奏和干燥判断都需要长期积累的手感。",
+    hintText: "重点不在机器能否做动作，而在细微状态如何判断。",
+    stamp: "百工成纸", slipId: "crafts"
   },
   {
     id: "zhuchui-demo",
@@ -1004,33 +1799,24 @@ function festivalProgress() {
 
 function openFestivalEntrance() {
   openModal(`
-    <section class="festival-entry" aria-labelledby="festivalEntryTitle">
-      <div class="festival-entry-border" aria-hidden="true"></div>
-      <div class="festival-entry-lantern festival-entry-lantern-left" aria-hidden="true">
-        <span class="lantern-tassel"><i></i><i></i><i></i></span>
-      </div>
-      <div class="festival-entry-lantern festival-entry-lantern-right" aria-hidden="true">
-        <span class="lantern-tassel"><i></i><i></i><i></i></span>
-      </div>
-      <div class="festival-entry-top-banner" aria-hidden="true"><i></i><i></i><i></i></div>
-      <div class="festival-entry-fg-leaves" aria-hidden="true"><i></i><i></i><i></i></div>
-      <div class="festival-entry-ground" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
-      <div class="festival-entry-corner festival-entry-corner-tl" aria-hidden="true"></div>
-      <div class="festival-entry-corner festival-entry-corner-tr" aria-hidden="true"></div>
-      <div class="festival-entry-corner festival-entry-corner-bl" aria-hidden="true"></div>
-      <div class="festival-entry-corner festival-entry-corner-br" aria-hidden="true"></div>
-      <p class="festival-entry-kicker">宣纸老街 · 节令雅集</p>
-      <h2 id="festivalEntryTitle">纸市非遗节</h2>
-      <p class="festival-entry-lead">一张纸，藏着山水与匠心。循着墨香入市，与四位行家交换一枚纸上的答案。</p>
-      <div class="festival-entry-highlights" aria-label="纸市活动亮点">
-        <span>四席匠艺</span><span>限时探访</span><span>集印成册</span>
-      </div>
-      <div class="festival-entry-actions">
-        <button class="festival-primary-btn" type="button" data-action="enterFestival">开启纸市之旅</button>
-        <button class="festival-secondary-btn" type="button" data-action="close">暂不前往</button>
+    <section class="paper-realm-entry" aria-labelledby="festivalEntryTitle">
+      <span class="paper-realm-entry-lantern paper-realm-entry-lantern--left" aria-hidden="true"></span>
+      <span class="paper-realm-entry-lantern paper-realm-entry-lantern--right" aria-hidden="true"></span>
+      <span class="paper-realm-entry-bamboo" aria-hidden="true"></span>
+      <div class="paper-realm-entry-copy">
+        <p class="paper-realm-eyebrow">纸境千年 · 节令雅集</p>
+        <h2 id="festivalEntryTitle">纸境千年</h2>
+        <p>循着墨香入市，与四席匠艺相会；集齐知识印章，读懂一张纸的来处与心意。</p>
+        <div class="paper-realm-entry-tags" aria-label="纸境千年活动亮点">
+          <span>四席匠艺</span><span>雅集探访</span><span>集印成册</span>
+        </div>
+        <div class="paper-realm-entry-actions">
+          <button class="paper-realm-primary" type="button" data-action="enterFestival">开启雅集</button>
+          <button class="paper-realm-secondary" type="button" data-action="close">暂不前往</button>
+        </div>
       </div>
     </section>
-  `, "modal", "festival-modal-card");
+  `, "modal", "festival-modal-card paper-realm-modal paper-realm-entry-card");
 }
 
 function openPaperFestival() {
@@ -1038,73 +1824,70 @@ function openPaperFestival() {
   const stalls = festivalTasks.map((task) => {
     const done = state.completedFestivalTasks.has(task.id);
     return `
-      <button class="festival-booth festival-booth--${task.icon}${done ? " completed" : ""}" type="button" data-action="openFestivalTask" data-task-id="${task.id}" aria-label="${task.stall}：${task.npc}，${task.brief}">
-        <span class="booth-awning" aria-hidden="true"></span>
-        <span class="booth-awning-edge" aria-hidden="true"></span>
-        <span class="booth-pole booth-pole-left" aria-hidden="true"></span>
-        <span class="booth-pole booth-pole-right" aria-hidden="true"></span>
-        <span class="booth-backdrop" aria-hidden="true"></span>
-        <span class="booth-counter" aria-hidden="true"></span>
-        <span class="booth-counter-edge" aria-hidden="true"></span>
-        <span class="booth-props" aria-hidden="true"><i></i><i></i><i></i></span>
-        <span class="booth-hanging-art" aria-hidden="true"></span>
-        <span class="booth-paper-stack" aria-hidden="true"><i></i><i></i></span>
-        <span class="festival-npc festival-npc--${task.icon} festival-npc--image" aria-hidden="true"></span>
-        <span class="booth-label"><i aria-hidden="true"></i><strong>${task.stall}</strong><em>${task.npc}</em></span>
-        ${done ? `<b class="festival-done-stamp">已完成</b>` : `<span class="booth-warm-glow" aria-hidden="true"></span>`}
+      <button class="paper-realm-booth paper-realm-booth--${task.icon}${done ? " is-complete" : ""}" type="button" data-action="openFestivalTask" data-task-id="${task.id}" aria-label="探访${task.stall}：${task.npc}">
+        <span class="paper-realm-booth-canopy" aria-hidden="true"></span>
+        <span class="paper-realm-booth-lantern" aria-hidden="true"></span>
+        <span class="paper-realm-booth-backdrop" aria-hidden="true"></span>
+        <span class="paper-realm-booth-counter" aria-hidden="true"></span>
+        <span class="paper-realm-booth-props" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="festival-npc festival-npc--${task.icon} festival-npc--image paper-realm-booth-character" aria-hidden="true"></span>
+        <span class="paper-realm-booth-plaque"><small>雅集探访</small><strong>${task.stall}</strong><em>${task.npc}</em></span>
+        <span class="paper-realm-booth-seal" aria-hidden="true">${done ? "已集印" : "探访"}</span>
       </button>
     `;
   }).join("");
 
   openModal(`
-    <section class="paper-festival" aria-labelledby="paperFestivalTitle">
-      <header class="paper-festival-header">
-        <span class="festival-header-lantern" aria-hidden="true"></span>
-        <div>
-          <p>宣纸老街 · 节令雅集</p>
-          <h2 id="paperFestivalTitle">纸市非遗节</h2>
-          <span>四席匠艺，以纸会友；集齐四枚知识印章。</span>
-        </div>
-        <span class="festival-header-leaves" aria-hidden="true"></span>
+    <section class="paper-realm-market" aria-labelledby="paperFestivalTitle">
+      <span class="paper-realm-market-leaves paper-realm-market-leaves--left" aria-hidden="true"></span>
+      <span class="paper-realm-market-leaves paper-realm-market-leaves--right" aria-hidden="true"></span>
+      <header class="paper-realm-market-header">
+        <p>纸境千年 · 节令雅集</p>
+        <h2 id="paperFestivalTitle">纸境千年</h2>
+        <span>四席行家，以纸设问；答得出，才算懂纸。</span>
       </header>
-      <div class="festival-market-scene" aria-label="纸市非遗节集市场景">
-        <span class="market-canopy market-canopy-left" aria-hidden="true"></span>
-        <span class="market-canopy market-canopy-right" aria-hidden="true"></span>
-        <span class="market-lantern market-lantern-one" aria-hidden="true"></span>
-        <span class="market-lantern market-lantern-two" aria-hidden="true"></span>
-        <span class="market-lantern market-lantern-three" aria-hidden="true"></span>
-        <span class="market-lantern-string" aria-hidden="true"><i></i><i></i><i></i></span>
-        <span class="market-paper-piece market-paper-one" aria-hidden="true"></span>
-        <span class="market-paper-piece market-paper-two" aria-hidden="true"></span>
-        <span class="market-paper-piece market-paper-three" aria-hidden="true"></span>
-        <span class="market-paper-piece market-paper-four" aria-hidden="true"></span>
-        <span class="market-parasol" aria-hidden="true"></span>
-        <span class="market-center-table" aria-hidden="true"><i></i><i></i></span>
-        <span class="market-flag-line" aria-hidden="true"></span>
-        <span class="market-bamboo-pole market-bamboo-left" aria-hidden="true"></span>
-        <span class="market-bamboo-pole market-bamboo-right" aria-hidden="true"></span>
-        <span class="market-bamboo-shelf" aria-hidden="true"><i></i><i></i><i></i></span>
-        <span class="market-ground-stone" aria-hidden="true"><i></i><i></i><i></i></span>
-        <span class="market-ground-leaf" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-        <span class="market-ground-grass" aria-hidden="true"><i></i><i></i></span>
-        <span class="market-dryer-rack" aria-hidden="true"><i></i></span>
-        <span class="market-paper-scroll" aria-hidden="true"><i></i><i></i></span>
-        <span class="market-wooden-sign" aria-hidden="true"></span>
-        <span class="market-straw-bundle" aria-hidden="true"><i></i></span>
-        <span class="market-fg-leaf" aria-hidden="true"><i></i><i></i><i></i></span>
-        <span class="market-fg-lantern" aria-hidden="true"><i></i></span>
-        <div class="festival-stalls">${stalls}</div>
-      </div>
-      <footer class="paper-festival-footer">
-        <div class="festival-counters">
-          <span class="festival-counter-coins">行旅铜钱 <b>${state.paperCoins}</b></span>
-          <span class="festival-counter-stamps">纸市印章 <b>${state.earnedStamps.size}</b> / ${festivalTasks.length}</span>
-          <span>探访进度 <b>${completed}</b> / ${festivalTasks.length}</span>
+      <div class="paper-realm-stalls" aria-label="纸境千年集市摊位">${stalls}</div>
+      <footer class="paper-realm-statusbar">
+        <div class="paper-realm-status" aria-label="纸境千年进度">
+          <span><i class="paper-realm-status-icon paper-realm-status-icon--coin" aria-hidden="true"></i>行旅铜钱 <b>${state.paperCoins}</b></span>
+          <span><i class="paper-realm-status-icon paper-realm-status-icon--stamp" aria-hidden="true"></i>纸市印章 <b>${state.earnedStamps.size} / ${festivalTasks.length}</b></span>
+          <span><i class="paper-realm-status-icon paper-realm-status-icon--scroll" aria-hidden="true"></i>探访进度 <b>${completed} / ${festivalTasks.length}</b></span>
         </div>
-        <button class="festival-secondary-btn" type="button" data-action="close">返回老街</button>
+        <button class="paper-realm-return" type="button" data-action="close">返回老街</button>
+        <button class="paper-realm-return" type="button" data-action="openFestivalExchange" style="background:rgba(231,166,66,0.15);border-color:var(--gold);color:var(--gold);">🪙 集市兑换（${state.paperCoins || 0}铜钱）</button>
       </footer>
     </section>
-  `, "modal", "festival-modal-card");
+  `, "modal", "festival-modal-card paper-realm-modal paper-realm-market-card");
+}
+
+function openFestivalExchange() {
+  const coins = state.paperCoins || 0;
+  openModal(`
+    <section class="festival-task" aria-labelledby="exchangeTitle">
+      <div class="festival-task-corner festival-task-corner-tl" aria-hidden="true"></div>
+      <div class="festival-task-corner festival-task-corner-tr" aria-hidden="true"></div>
+      <div class="festival-task-corner festival-task-corner-bl" aria-hidden="true"></div>
+      <div class="festival-task-corner festival-task-corner-br" aria-hidden="true"></div>
+      <p class="festival-task-stall">集市铜钱铺</p>
+      <h2 id="exchangeTitle">🪙 铜钱兑好物</h2>
+      <p>答题赚的铜钱可在此兑换道具，带到工坊使用。</p>
+      <p style="font-size:12px;color:var(--wood);margin:4px 0;">💰 余额：<strong style="color:var(--gold);">${coins}枚</strong></p>
+      <div style="display:flex;flex-direction:column;gap:8px;margin:10px 0;">
+        <button class="festival-option-card" type="button" data-action="buyFestivalItem" data-item-id="luckyCharm" ${coins < 5 ? 'disabled' : ''}>
+          <span>🍀 幸运符</span><small>下一张纸全属性+5%</small><b>5铜钱</b>
+        </button>
+        <button class="festival-option-card" type="button" data-action="buyFestivalItem" data-item-id="craftsmanNote" ${coins < 10 ? 'disabled' : ''}>
+          <span>📜 匠人手记</span><small>随机解锁科普卡</small><b>10铜钱</b>
+        </button>
+        <button class="festival-option-card" type="button" data-action="buyFestivalItem" data-item-id="bambooOil" ${coins < 8 ? 'disabled' : ''}>
+          <span>🪣 竹帘护养油</span><small>下5张纸Perfect区+2%</small><b>8铜钱</b>
+        </button>
+      </div>
+      <div class="modal-actions">
+        <button class="secondary-btn" type="button" data-action="close">返回集市</button>
+      </div>
+    </section>
+  `);
 }
 
 function openFestivalTask(taskId, feedback = "") {
@@ -1126,9 +1909,9 @@ function openFestivalTask(taskId, feedback = "") {
       <div class="festival-task-corner festival-task-corner-bl" aria-hidden="true"></div>
       <div class="festival-task-corner festival-task-corner-br" aria-hidden="true"></div>
       <div class="festival-task-top-banner" aria-hidden="true"></div>
-      <div class="festival-task-avatar festival-stall-${task.icon}" aria-hidden="true"><span></span></div>
+      <div class="festival-task-avatar festival-task-avatar--npc" aria-hidden="true"><i class="festival-npc festival-npc--${task.icon} festival-npc--image paper-realm-task-character"></i></div>
       <p class="festival-task-stall">${task.stall} · ${task.npc}</p>
-      <h2 id="festivalTaskTitle">纸市选纸问答</h2>
+      <h2 id="festivalTaskTitle">纸境千年问答</h2>
       <blockquote>${task.dialogue}</blockquote>
       ${feedbackHtml}
       <div class="festival-options" aria-label="选择一种纸">${options}</div>
@@ -1150,6 +1933,12 @@ function answerFestivalTask(taskId, option) {
     state.completedFestivalTasks.add(task.id);
     state.paperCoins += 5;
     state.earnedStamps.add(task.stamp);
+    if (task.slipId) unlockPaperSlip(task.slipId);
+  }
+  const chapterEvent = checkStoryProgress();
+  if (chapterEvent) {
+    openModal(chapterEvent, "modal", "story-chapter-modal");
+    return;
   }
   openFestivalReward(task, firstCompletion);
 }
@@ -1163,7 +1952,7 @@ function openFestivalReward(task, firstCompletion) {
   }
   if (completed === festivalTasks.length && !state.festivalCompleteShown) {
     state.festivalCompleteShown = true;
-    milestone = `<div class="festival-milestone festival-milestone-final"><strong>纸市非遗节圆满完成！</strong><span>你不只认识宣纸，也学会了根据用途选择纸张。</span><em>最终奖励：纸市节纪念贴纸 · 宣屿表情包「认真选纸」· 节日摊位装饰「小纸灯」</em></div>`;
+    milestone = `<div class="festival-milestone festival-milestone-final"><strong>纸境千年雅集圆满完成！</strong><span>你不只认识宣纸，也学会了根据用途选择纸张。</span><em>最终奖励：纸境千年纪念贴纸 · 宣屿表情包「认真选纸」· 雅集摊位装饰「小纸灯」</em></div>`;
   }
 
   openModal(`
@@ -1177,32 +1966,112 @@ function openFestivalReward(task, firstCompletion) {
       <p class="festival-reward-kicker">纸市回音</p>
       <h2 id="festivalRewardTitle">${firstCompletion ? "选得漂亮！" : "温故知新！"}</h2>
       <p>${task.correctText}</p>
-      ${firstCompletion ? `<div class="festival-reward-items"><span class="reward-coin-icon">纸市铜钱 × 5</span><b>${task.stamp}</b></div>` : ""}
+      ${firstCompletion ? `<div class="festival-reward-items"><span class="reward-coin-icon">纸市铜钱 × 5</span><b>${task.stamp}</b></div>${task.slipId ? `<p class="paper-slip-inline">纸谱残页归位：${getPaperSlip(task.slipId)?.title || "新残页"}</p>` : ""}` : ""}
       ${milestone}
       <button class="festival-primary-btn" type="button" data-action="openPaperFestival">继续逛纸市</button>
     </section>
   `, "modal", "festival-modal-card festival-reward-card");
 }
 
+// ========================================
+// 三阶段制纸工坊系统
+// 阶段1：浸泡控制 → 阶段2：浓度平衡 → 阶段3：抄纸
+// 每个阶段都有科普知识注入
+// ========================================
+
 function openWorkshop() {
+  if (state.storyChapter === 1) {
+    const step = getChapterOneStep();
+    if (step === "find_grandma") {
+      openModal(`<section class="story-choice-card"><p class="story-choice-kicker">纸境千年 · 工坊提醒</p><h2>做纸不急</h2><blockquote>你是宣屿吧？外婆刚才还在宣纸铺门口等你。做纸不急，先去听她说完这条老街的事。</blockquote>${closeBtn("去找外婆")}</section>`, "modal", "story-choice-modal");
+      return;
+    }
+    if (step === "open_paper_book" || step === "paper_shop_exam") {
+      openModal(`<section class="story-choice-card"><p class="story-choice-kicker">纸境千年 · 工坊提醒</p><h2>先懂纸性</h2><blockquote>纸还没认清就急着做？宣纸不是只看手快，要先懂纸性。先去宣纸铺看看生宣、熟宣、半熟宣吧。</blockquote>${closeBtn("去宣纸铺")}</section>`, "modal", "story-choice-modal");
+      return;
+    }
+  }
   if (state.miniGame) state.miniGame.running = false;
   state.miniGame = null;
+  state.orderComplete = false;
+
+  const upgradeCount = Object.values(state.upgrades).filter(Boolean).length;
+  const upgradeTotal = Object.keys(UPGRADES).length;
+
+  // 科普知识轮播（每次进工坊随机显示一条）
+  const scienceTips = [
+    '💡 青檀树皮含韧皮纤维，是宣纸"千年寿纸"的关键。',
+    '💡 沙田稻草纤维较短，与青檀皮纤维交织形成均匀纸面。',
+    '💡 宣纸有"七十二道工序"之说，从原料到成品历时近一年。',
+    '💡 捞纸、晒纸等环节依赖长期练习与对纸浆状态的判断。',
+    '💡 宣纸始于唐代，安徽泾县是原产地，已有千年历史。',
+    '💡 好宣纸能让墨色自然渗化，产生"墨分五色"的效果。'
+  ];
+  const tip = scienceTips[Math.floor(Math.random() * scienceTips.length)];
+
   openModal(`
     <section class="workshop-panel" aria-labelledby="workshopTitle">
       <header class="workshop-header">
         <span class="workshop-icon" aria-hidden="true"></span>
         <div>
           <p class="workshop-kicker">宣纸工坊</p>
-          <h2 id="workshopTitle">抄纸小游戏</h2>
+          <h2 id="workshopTitle">三阶段制纸</h2>
+          <span class="workshop-phase-hint" id="phaseHint">第1步 · 树皮浸泡</span>
         </div>
       </header>
-      <p class="workshop-tip">看准竹帘入水后纸浆最均匀的时机，<strong>按空格</strong>停止指针。越接近绿色区域中心，纸张参数越好。</p>
-      <div class="mini-game">
-        <div class="paper-vat" aria-hidden="true">
-          <span class="vat-bubble vat-bubble-1" aria-hidden="true"></span>
-          <span class="vat-bubble vat-bubble-2" aria-hidden="true"></span>
-          <span class="vat-bubble vat-bubble-3" aria-hidden="true"></span>
+
+      <!-- 阶段进度条 -->
+      <div class="phase-progress">
+        <div class="phase-step phase-step--active" data-phase="1">浸泡</div>
+        <div class="phase-step" data-phase="2">调浆</div>
+        <div class="phase-step" data-phase="3">抄纸</div>
+      </div>
+      <p class="workshop-story-note">这一次不是比快，是比稳。竹帘上的纸浆分布，决定纸面厚薄。</p>
+
+      <!-- 科普提示 -->
+      <div class="workshop-science-tip">${tip}</div>
+      ${!state.completedQuests.has("workshopProcess") ? `<button class="secondary-btn workshop-story-button" type="button" data-action="openQuest" data-quest-id="workshopProcess">先帮学徒理清工序</button>` : ""}
+
+      <!-- 阶段1：浸泡控制 -->
+      <div id="phase1" class="phase-game">
+        <p class="phase-desc">原料浸泡时需要控制水分、时间和纸浆状态，让纤维逐渐舒展。进度条进入绿色区域时点击。</p>
+        <div class="meter-wrap">
+          <div class="meter-label-row" aria-hidden="true">
+            <span>未浸透</span><span class="meter-label-good">适中</span><span>过浸</span>
+          </div>
+          <div class="meter" aria-label="浸泡度判定条">
+            <div class="success-zone" style="left:70%;width:15%"></div>
+            <div id="soakBar" class="progress-fill" style="width:0%"></div>
+          </div>
         </div>
+        <div class="workshop-result-hint" id="phase1Hint" aria-live="polite">等待树皮浸泡...</div>
+      </div>
+
+      <!-- 阶段2：浓度平衡 -->
+      <div id="phase2" class="phase-game hidden">
+        <p class="phase-desc">调浆要留意水分、温度和纤维分散状态。青檀长纤维与稻草短纤维配合，有助于纸面更均匀。</p>
+        <div class="conc-bars">
+          <div class="conc-bar-wrap">
+            <span class="conc-label">纸浆浓度</span>
+            <div class="meter conc-meter" id="concMeter1">
+              <div class="success-zone" style="left:60%;width:20%"></div>
+              <div id="concPointer1" class="pointer" style="left:50%"></div>
+            </div>
+          </div>
+          <div class="conc-bar-wrap">
+            <span class="conc-label">水温</span>
+            <div class="meter conc-meter" id="concMeter2">
+              <div class="success-zone" style="left:60%;width:20%"></div>
+              <div id="concPointer2" class="pointer" style="left:50%"></div>
+            </div>
+          </div>
+        </div>
+        <div class="workshop-result-hint" id="phase2Hint" aria-live="polite">用鼠标上下左右调整两项至绿色区域...</div>
+      </div>
+
+      <!-- 阶段3：抄纸（原有机制） -->
+      <div id="phase3" class="phase-game hidden">
+        <p class="phase-desc">竹帘入水角度决定<strong>纤维排列方向</strong>——这就是手工宣纸"帘纹"的来源。靠近绿色区域中心，纤维分布最均匀。</p>
         <div class="meter-wrap">
           <div class="meter-label-row" aria-hidden="true">
             <span>Miss</span><span class="meter-label-good">Good</span><span class="meter-label-perfect">Perfect</span><span class="meter-label-good">Good</span><span>Miss</span>
@@ -1212,67 +2081,257 @@ function openWorkshop() {
             <div id="pointer" class="pointer"></div>
           </div>
         </div>
+        <div class="workshop-result-hint" id="phase3Hint" aria-live="polite">等待竹帘...</div>
       </div>
-      <div class="workshop-result-hint" aria-live="polite" id="workshopResultHint"></div>
+
+      <!-- 工坊升级 -->
+      <div class="workshop-upgrade-section">
+        <p class="workshop-upgrade-title">🔧 工坊升级（${upgradeCount}/${upgradeTotal}）</p>
+        <div class="workshop-upgrade-list">
+          ${Object.values(UPGRADES).map(up => {
+            const owned = state.upgrades[up.id];
+            const canBuy = state.coins >= up.cost && !owned;
+            return `
+              <button class="workshop-upgrade-btn ${owned ? "owned" : ""} ${canBuy ? "can-buy" : ""}"
+                type="button" data-action="buyUpgrade"
+                data-upgrade-id="${up.id}" ${owned ? "disabled" : ""}>
+                <span class="upgrade-icon">${up.icon}</span>
+                <span class="upgrade-name">${up.name}</span>
+                <span class="upgrade-desc">${up.desc}</span>
+                ${owned ? '<span class="upgrade-owned">已升级</span>' : `<span class="upgrade-cost">${up.cost}金币</span>`}
+              </button>
+            `;
+          }).join("")}
+        </div>
+      </div>
+
+
       <div class="modal-actions">
-        <button class="primary-btn stop-mini-btn mobile-only" type="button" data-action="stopMiniGame">停止竹帘</button>
+        <button class="primary-btn stop-mini-btn mobile-only" type="button" data-action="advancePhase">继续</button>
         <button class="danger-btn" type="button" data-action="close">离开工坊</button>
       </div>
     </section>
   `, "minigame");
+
+  // 初始化阶段1
   state.miniGame = {
+    phase: 1,
     running: true,
+    soakProgress: 0,
+    soakDir: 1,
+    concBar1: 50,
+    concBar2: 50,
+    concBar1Dir: 1,
+    concBar2Dir: -1,
+    concStableTime: 0,
     pos: 0,
     dir: 1,
-    speed: 1.45,
-    pointer: document.querySelector("#pointer")
+    speed: state.upgrades.workbench ? 1.15 : 1.45,
+    pointer: null,
+    phaseResults: { soak: null, concentration: null, stop: null }
   };
+  // 科普卡片解锁
+  if (!state.unlockedCards.has("七十二道工序")) {
+    state.unlockedCards.add("七十二道工序");
+  }
 }
 
 function advanceMiniGame() {
-  const game = state.miniGame;
-  game.pos += game.dir * game.speed;
-  if (game.pos >= 100) {
-    game.pos = 100;
-    game.dir = -1;
+  const g = state.miniGame;
+  if (!g?.running) return;
+
+  if (g.phase === "drying") {
+    // 晒纸场：晾晒进度条
+    g.dryProgress += 0.4 * g.dryDir;
+    if (g.dryProgress >= 100) g.dryDir = -1;
+    else if (g.dryProgress <= 0) g.dryDir = 1;
+    const bar = document.querySelector("#dryBar");
+    const hint = document.querySelector("#dryHint");
+    const zone = g.weather.zone;
+    if (bar) bar.style.width = `${g.dryProgress}%`;
+    // 晾晒过程中不提示，完成后评价
+  } else if (g.phase === 1) {
+    // 阶段1：浸泡进度条自动走动
+    g.soakProgress += 0.5 * g.soakDir;
+    if (g.soakProgress >= 100) g.soakDir = -1;
+    else if (g.soakProgress <= 0) g.soakDir = 1;
+    const bar = document.querySelector("#soakBar");
+    const hint = document.querySelector("#phase1Hint");
+    if (bar) bar.style.width = `${g.soakProgress}%`;
+    if (hint) { hint.innerHTML = ''; hint.style.color = 'var(--wood)'; }
+  } else if (g.phase === 2) {
+    // 阶段2：两个浓度bar独立移动
+    g.concBar1 += 0.8 * g.concBar1Dir;
+    g.concBar2 += 0.6 * g.concBar2Dir;
+    if (g.concBar1 >= 100) { g.concBar1 = 100; g.concBar1Dir = -1; }
+    if (g.concBar1 <= 0) { g.concBar1 = 0; g.concBar1Dir = 1; }
+    if (g.concBar2 >= 100) { g.concBar2 = 100; g.concBar2Dir = -1; }
+    if (g.concBar2 <= 0) { g.concBar2 = 0; g.concBar2Dir = 1; }
+
+    const p1 = document.querySelector("#concPointer1");
+    const p2 = document.querySelector("#concPointer2");
+    const hint = document.querySelector("#phase2Hint");
+    if (p1) p1.style.left = `calc(${g.concBar1}% - 6px)`;
+    if (p2) p2.style.left = `calc(${g.concBar2}% - 6px)`;
+
+    const bothInZone = g.concBar1 >= 60 && g.concBar1 <= 80 && g.concBar2 >= 60 && g.concBar2 <= 80;
+    if (bothInZone) {
+      g.concStableTime += 16;
+    } else {
+      g.concStableTime = 0;
+    }
+    // 不提示，完成后评价
+    if (hint) { hint.innerHTML = ''; hint.style.color = 'var(--wood)'; }
+  } else if (g.phase === 3) {
+    // 阶段3：原有指针移动逻辑
+    g.pos += g.dir * g.speed;
+    if (g.pos >= 100) { g.pos = 100; g.dir = -1; }
+    if (g.pos <= 0) { g.pos = 0; g.dir = 1; }
+    if (g.pointer) g.pointer.style.left = `calc(${g.pos}% - 6px)`;
+    // 不提示，完成后评价
+    const hint3 = document.querySelector("#phase3Hint");
+    if (hint3) { hint3.innerHTML = ''; hint3.style.color = 'var(--wood)'; }
   }
-  if (game.pos <= 0) {
-    game.pos = 0;
-    game.dir = 1;
-  }
-  if (game.pointer) game.pointer.style.left = `calc(${game.pos}% - 6px)`;
 }
 
 function stopMiniGame() {
   if (!state.miniGame?.running) return;
-  const distance = Math.abs(state.miniGame.pos - 50);
-  let result = "Miss";
-  if (distance <= 6) result = "Perfect";
-  else if (distance <= 12) result = "Good";
+  const g = state.miniGame;
 
-  state.miniGame.running = false;
-  state.gameState = "modal";
-  // 每次制纸都重置订单完成状态，支持多轮循环
-  state.orderComplete = false;
-  state.lastPaper = {
-    result,
-    stats: paperStats[result],
-    createdAt: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })
-  };
-  state.task = "去书画铺接待书法家";
-  updateHud();
-  renderReport(result);
-  updateMobileControls();
+  if (g.phase === "drying") return dryPaper();
+  if (g.phase === 1) {
+    // 阶段1完成：记录浸泡结果
+    const progress = g.soakProgress;
+    if (progress >= 70 && progress <= 85) g.phaseResults.soak = "perfect";
+    else if (progress >= 60 && progress <= 90) g.phaseResults.soak = "good";
+    else g.phaseResults.soak = "miss";
+
+    // 进入阶段2
+    g.phase = 2;
+    document.querySelector("#phase1").classList.add("hidden");
+    document.querySelector("#phase2").classList.remove("hidden");
+    document.querySelector("#phaseHint").textContent = "第2步 · 纸浆调配";
+    document.querySelectorAll(".phase-step")[0].classList.replace("phase-step--active", "phase-step--done");
+    document.querySelectorAll(".phase-step")[1].classList.add("phase-step--active");
+    showToast("✅ 浸泡完成！现在调节纸浆浓度和水温。");
+    // 解锁科普卡
+    if (!state.unlockedCards.has("青檀树皮")) state.unlockedCards.add("青檀树皮");
+
+  } else if (g.phase === 2) {
+    // 阶段2完成：需要两项都稳定在绿色区域1.5秒
+    const bothStable = g.concStableTime >= 1500;
+    const inRange1 = g.concBar1 >= 60 && g.concBar1 <= 80;
+    const inRange2 = g.concBar2 >= 60 && g.concBar2 <= 80;
+    if (bothStable && inRange1 && inRange2) g.phaseResults.concentration = "perfect";
+    else if (inRange1 && inRange2) g.phaseResults.concentration = "good";
+    else g.phaseResults.concentration = "miss";
+
+    // 进入阶段3
+    g.phase = 3;
+    document.querySelector("#phase2").classList.add("hidden");
+    document.querySelector("#phase3").classList.remove("hidden");
+    document.querySelector("#phaseHint").textContent = "第3步 · 抄纸定形";
+    document.querySelectorAll(".phase-step")[1].classList.replace("phase-step--active", "phase-step--done");
+    document.querySelectorAll(".phase-step")[2].classList.add("phase-step--active");
+    g.pointer = document.querySelector("#pointer");
+    if (!g.pointer) g.pointer = document.querySelector("#pointer");
+    showToast("✅ 浓度已调好！准备抄纸。");
+    if (!state.unlockedCards.has("吸墨性")) state.unlockedCards.add("吸墨性");
+
+  } else if (g.phase === 3) {
+    // 阶段3完成：抄纸判定
+    const distance = Math.abs(g.pos - 50);
+    let result = "Miss";
+    let perfectRange = 6;
+    if (state.upgrades.bambooMat) perfectRange = 9;
+    if (state.festivalBuffs.bambooOil > 0) perfectRange += 2; // 竹帘护养油
+    if (distance <= perfectRange) result = "Perfect";
+    else if (distance <= 13) result = "Good";
+    g.phaseResults.stop = result;
+
+    // 计算最终纸张属性（三阶段综合）
+    g.running = false;
+    state.gameState = "modal";
+    state.orderComplete = false;
+    state.paperDried = false; // 新纸需要晾晒
+
+    const baseStats = { ...paperStats[result] };
+    // 阶段1 buff：浸泡好 → 韧性+10，均匀度+10
+    if (g.phaseResults.soak === "perfect") { baseStats.toughness += 10; baseStats.evenness += 10; }
+    else if (g.phaseResults.soak === "good") { baseStats.toughness += 5; baseStats.evenness += 5; }
+    else { baseStats.toughness -= 8; baseStats.evenness -= 8; }
+    // 阶段2 buff：浓度好 → 吸墨+10，白度+10
+    if (g.phaseResults.concentration === "perfect") { baseStats.ink += 10; baseStats.whiteness += 10; }
+    else if (g.phaseResults.concentration === "good") { baseStats.ink += 5; baseStats.whiteness += 5; }
+    else { baseStats.ink -= 8; baseStats.whiteness -= 8; }
+    // 纸浆配方升级
+    if (state.upgrades.pulpRecipe) {
+      Object.keys(baseStats).forEach(key => { baseStats[key] = Math.min(100, Math.round(baseStats[key] * 1.10)); });
+    }
+    // 集市幸运符
+    if (state.festivalBuffs.luckyCharm > 0) {
+      Object.keys(baseStats).forEach(key => { baseStats[key] = Math.min(100, Math.round(baseStats[key] * 1.05)); });
+      state.festivalBuffs.luckyCharm -= 1;
+    }
+    // 竹帘护养油消耗
+    if (state.festivalBuffs.bambooOil > 0) state.festivalBuffs.bambooOil -= 1;
+    // 限幅
+    Object.keys(baseStats).forEach(key => { baseStats[key] = Math.max(10, Math.min(100, baseStats[key])); });
+
+    const finalResult = baseStats.toughness >= 85 && baseStats.ink >= 85 && baseStats.evenness >= 85 ? "Perfect"
+      : baseStats.toughness >= 70 && baseStats.ink >= 70 && baseStats.evenness >= 70 ? "Good" : "Miss";
+
+    state.lastPaper = {
+      result: finalResult,
+      stats: baseStats,
+      soakResult: g.phaseResults.soak,
+      concResult: g.phaseResults.concentration,
+      stopResult: g.phaseResults.stop,
+      dried: false,
+      createdAt: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })
+    };
+    state.task = "去书画铺查看订单";
+    state.storyMilestones.workshopMade = true;
+    completeQuest("workshopProcess");
+    unlockPaperSlip("bamboo-screen");
+    if (state.storyChapter >= 3 && !state.unlockedKnowledgeCards.has("zhuchui")) {
+      unlockPaperSlip("zhuchui");
+    }
+    const chapterEvent = checkStoryProgress();
+    if (chapterEvent) {
+      openModal(chapterEvent, "modal", "story-chapter-modal");
+      updateMobileControls();
+      return;
+    }
+    updateHud();
+    renderReport(finalResult);
+    updateMobileControls();
+    // 解锁科普卡
+    if (!state.unlockedCards.has("抄纸手法")) state.unlockedCards.add("抄纸手法");
+  }
 }
 
 function renderReport(result) {
+  const p = state.lastPaper;
   const resultInfo = {
-    Perfect: { label: "完美", badge: "result-badge--perfect", desc: "竹帘起落很稳，纸浆分布漂亮。这是一张好纸。" },
-    Good: { label: "合格", badge: "result-badge--good", desc: "纸张达到了可用水准，还有打磨空间。" },
-    Miss: { label: "未达标", badge: "result-badge--miss", desc: "纸浆分布不均，建议回工坊再试一次。" }
+    Perfect: { label: "卓越", badge: "result-badge--perfect", desc: "三阶段都拿捏到位，这张宣纸堪称上品！" },
+    Good: { label: "精良", badge: "result-badge--good", desc: "纸张达到了可用水准，部分环节还有提升空间。" },
+    Miss: { label: "未达标", badge: "result-badge--miss", desc: "纸浆分布不均或工艺不到位，建议回工坊再试。" }
   }[result];
 
-  modalCard.innerHTML = `
+  const phaseLabels = { perfect: "✅ 完美", good: "👍 合格", miss: "❌ 失误" };
+  const phaseDetails = {
+    soak: { perfect: "浸泡恰到好处，木质素充分溶解而纤维骨架完好——韧性与均匀度俱佳。", good: "浸泡基本到位，纤维已软化，可继续下一步。", miss: "浸泡不当：纤维细胞壁受损或木质素残留过多，导致韧性下降、纸面不均匀。" },
+    concentration: { perfect: "浆浓度与水温均在黄金范围内，青檀长纤维与稻草短纤维完美交联——吸墨性与白度最优。", good: "调浆基本合格，纤维分布尚可。", miss: "浓度或水温偏离最佳区间：纤维交联不足或排列紊乱，影响了纸的吸墨性和洁白度。" },
+    stop: { Perfect: "抄纸时机精准，竹帘角度完美——纤维均匀铺展，帘纹清晰美观，这是一张好纸的根基。", Good: "抄纸基本稳定，尚可进一步提升竹帘控制精度。", Miss: "抄纸偏离中心：纤维分布不够均匀，纸张厚薄不一，影响整体品质。" }
+  };
+
+  openPage("workshop-report", {
+    type: "modal",
+    nextState: "modal",
+    cardClass: "workshop-report-card",
+    replace: true,
+    html: `
     <section class="report-panel" aria-labelledby="reportTitle">
       <header class="report-header">
         <p class="report-kicker">宣纸检测报告</p>
@@ -1281,13 +2340,25 @@ function renderReport(result) {
         </h2>
         <p class="report-desc">${resultInfo.desc}</p>
       </header>
-      ${makeReportHtml(state.lastPaper)}
+      <div class="phase-review">
+        <span>浸泡：${phaseLabels[p.soakResult] || "—"}</span>
+        <span>调浆：${phaseLabels[p.concResult] || "—"}</span>
+        <span>抄纸：${phaseLabels[p.stopResult] || "—"}</span>
+      </div>
+      <div class="phase-detail-review">
+        ${p.soakResult !== "perfect" && p.soakResult !== "good" ? `<div class="phase-feedback phase-feedback--miss">${phaseDetails.soak.miss}</div>` : ""}
+        ${p.concResult !== "perfect" && p.concResult !== "good" ? `<div class="phase-feedback phase-feedback--miss">${phaseDetails.concentration.miss}</div>` : ""}
+        ${p.stopResult !== "Perfect" && p.stopResult !== "Good" ? `<div class="phase-feedback phase-feedback--miss">${phaseDetails.stop.Miss}</div>` : ""}
+      </div>
+      ${makeReportHtml(p)}
+      ${p.dried ? '<p style="text-align:center;color:var(--jade);font-weight:700;font-size:14px;padding:10px;border:2px solid var(--jade);background:rgba(58,138,104,0.08);">☀️ 已晾晒 — 纸张品质已提升</p>' : '<p style="text-align:center;color:var(--gold);font-weight:700;font-size:15px;padding:12px 16px;border:2px dashed var(--gold);background:rgba(231,166,66,0.08);margin:12px 0;">💡 晾晒可提升品质 → 去老街「晒纸场」试试</p>'}
       <div class="modal-actions">
         <button class="primary-btn" type="button" data-action="close">带着报告去书画铺</button>
-        <button class="secondary-btn" type="button" data-action="retryWorkshop">再抄一张</button>
+        <button class="secondary-btn" type="button" data-action="retryWorkshop">再做一张</button>
       </div>
     </section>
-  `;
+    `
+  });
 }
 
 function makeReportHtml(paper) {
@@ -1301,7 +2372,7 @@ function makeReportHtml(paper) {
   ];
   const bars = params.map(({ label, key }) => {
     const val = stats[key];
-    const grade = val >= 85 ? "bar--high" : val >= 75 ? "bar--mid" : "bar--low";
+    const grade = val >= 85 ? "bar--high" : val >= 70 ? "bar--mid" : "bar--low";
     return `
       <div class="report-bar-item">
         <div class="report-bar-label"><span>${label}</span><strong>${val}</strong></div>
@@ -1309,55 +2380,179 @@ function makeReportHtml(paper) {
       </div>
     `;
   }).join("");
-  return `
-    <div class="report-bars" aria-label="宣纸参数">
-      ${bars}
+  return `<div class="report-bars" aria-label="宣纸参数">${bars}</div>`;
+}
+
+// ========================================
+// 晒纸场系统
+// 制纸完成后可来此晾晒，提升品质
+// 天气随机（晴天/阴天/雨天），影响晾晒效果
+// ========================================
+
+function openDryingYard() {
+  if (!state.lastPaper) {
+    openModal(`
+      <h2>☀️ 晒纸场</h2>
+      <p>晒纸场是宣纸制作的重要环节。湿纸需要在阳光下晾晒或焙笼上烤干。</p>
+      <p class="workshop-science-tip">传统晒纸使用焙笼——加热的弧形墙面，将湿纸一张张贴在焙笼上烘干。晒纸的温度、湿度、时间都会影响纸张的最终平整度和韧性。</p>
+      <p>你还没有可以晾晒的湿纸，先去<strong>工坊</strong>制作一张吧。</p>
+      <div class="modal-actions">${closeBtn("返回地图")}</div>
+    `);
+    return;
+  }
+  if (state.lastPaper.dried) {
+    openModal(`
+      <h2>☀️ 晒纸场</h2>
+      <p>这张纸已经晒过了，品质提升效果还在。</p>
+      ${makeReportHtml(state.lastPaper)}
+      <p style="color:var(--jade);font-weight:700;">☀️ 已晾晒 — 当前属性已经是最佳状态</p>
+      <div class="modal-actions">${closeBtn("返回地图")}</div>
+    `);
+    return;
+  }
+
+  // 随机天气
+  const weathers = [
+    { name: "☀️ 晴天", zone: { min: 80, max: 90 }, buff: 0.08, tip: "阳光正好，是晾晒的好日子。绿色区域较宽，容易把握。" },
+    { name: "☁️ 阴天", zone: { min: 70, max: 85 }, buff: 0.05, tip: "云层较厚，晾晒需要更早收纸。绿色区域偏左。" },
+    { name: "🌧️ 雨天", zone: null, buff: 0, tip: "今日下雨，不宜晾晒。建议先去书画铺交付，或者等天晴再来。" }
+  ];
+  const weather = weathers[Math.floor(Math.random() * weathers.length)];
+
+  if (!weather.zone) {
+    // 雨天 — 无法晾晒
+    openModal(`
+      <h2>🌧️ 晒纸场 · 雨天</h2>
+      <p class="workshop-science-tip">传统的晒纸场大多在室外。泾县的气候温和湿润，但雨天和梅雨季节会影响晒纸。所以造纸匠人也会使用焙笼——在室内用加热的弧形墙面烘干纸张。</p>
+      <p style="color:var(--brick);font-weight:700;">${weather.tip}</p>
+      <div class="modal-actions">
+        ${closeBtn("先去交付", "primary-btn")}
+        <button class="secondary-btn" type="button" data-action="refreshDryingWeather">🔄 等天晴</button>
+      </div>
+    `);
+    return;
+  }
+
+  // 开始晾晒小游戏
+  if (state.miniGame) state.miniGame.running = false;
+  state.miniGame = null;
+
+  openModal(`
+    <section class="workshop-panel" aria-labelledby="dryTitle">
+      <header class="workshop-header">
+        <span class="workshop-icon">☀️</span>
+        <div>
+          <p class="workshop-kicker">晒纸场 · ${weather.name}</p>
+          <h2 id="dryTitle">晾晒湿纸</h2>
+        </div>
+      </header>
+      <p class="phase-desc">${weather.tip}<br>进度条进入<strong>绿色区域</strong>时点击停止。收得太早纸会发霉，收得太晚纸会脆裂。</p>
+      <div class="meter-wrap">
+        <div class="meter-label-row" aria-hidden="true">
+          <span>太湿</span><span class="meter-label-good">最佳</span><span>过干</span>
+        </div>
+        <div class="meter" aria-label="晾晒度判定条">
+          <div class="success-zone" style="left:${weather.zone.min}%;width:${weather.zone.max - weather.zone.min}%"></div>
+          <div id="dryBar" class="progress-fill" style="width:0%;background:var(--gold);"></div>
+        </div>
+      </div>
+      <div class="workshop-result-hint" id="dryHint" aria-live="polite">等待晾晒中...</div>
+      <div class="workshop-science-tip">💡 宣纸晾晒不只是"晒干"——温度、湿度、时间三者配合，才能让纸张平整、柔韧、不翘不裂。老匠人说："晒纸三分工，晾出十年功。"</div>
+      <div class="modal-actions">
+        <button class="primary-btn stop-mini-btn mobile-only" type="button" data-action="dryPaper">收纸</button>
+        <button class="danger-btn" type="button" data-action="close">离开晒纸场</button>
+      </div>
+    </section>
+  `, "minigame");
+
+  state.miniGame = {
+    phase: "drying",
+    running: true,
+    dryProgress: 0,
+    dryDir: 1,
+    weather: weather
+  };
+}
+
+function dryPaper() {
+  const g = state.miniGame;
+  if (!g?.running || g.phase !== "drying") return;
+  const prog = g.dryProgress;
+  const zone = g.weather.zone;
+  g.running = false;
+  state.gameState = "modal";
+
+  let result;
+  if (prog >= zone.min && prog <= zone.max) {
+    result = "perfect";
+  } else if (prog >= zone.min - 10 && prog <= zone.max + 10) {
+    result = "good";
+  } else {
+    result = "miss";
+  }
+
+  // 应用晾晒效果
+  const buff = g.weather.buff;
+  const p = state.lastPaper;
+  if (result === "perfect") {
+    Object.keys(p.stats).forEach(k => { p.stats[k] = Math.min(100, Math.round(p.stats[k] * (1 + buff))); });
+    p.dried = true;
+    state.paperDried = true;
+    showToast("☀️ 晾晒完美！纸张品质大幅提升！");
+  } else if (result === "good") {
+    Object.keys(p.stats).forEach(k => { p.stats[k] = Math.min(100, Math.round(p.stats[k] * (1 + buff * 0.5))); });
+    p.dried = true;
+    state.paperDried = true;
+    showToast("👍 晾晒完成，纸张品质有小幅提升。");
+  } else {
+    // 失败：收太早发霉，收太晚脆裂
+    if (prog < zone.min) {
+      p.stats.evenness = Math.max(10, Math.round(p.stats.evenness * 0.85));
+      showToast("⚠️ 收得太早！纸张发霉，均匀度下降。");
+    } else {
+      p.stats.toughness = Math.max(10, Math.round(p.stats.toughness * 0.85));
+      showToast("⚠️ 收得太晚！纸张脆裂，韧性下降。");
+    }
+  }
+
+  updateHud();
+  state.storyMilestones.dryingDone = true;
+  if (result !== "miss") completeQuest("dryingYard");
+  unlockPaperSlip("drying");
+  const chapterEvent = checkStoryProgress();
+  if (chapterEvent) {
+    openModal(chapterEvent, "modal", "story-chapter-modal");
+    return;
+  }
+  const zoneDisplay = zone ? `${zone.min}% - ${zone.max}%` : "—";
+  const actualProg = Math.round(prog);
+  const resultText = {
+    perfect: `<span style="color:var(--jade);">✅ 晾晒得当（收在${zoneDisplay}）— 湿纸平稳定形，纸面更平整、韧性更好。</span>`,
+    good: `<span style="color:var(--gold);">👍 晾晒合格（收在${actualProg}%）— 纸张基本干燥，品质有小幅提升。</span>`,
+    miss: `<span style="color:var(--brick);">❌ ${prog < zone.min ? '收得太早！纸还偏湿，纸面不够稳定。' : '收得太晚！纸张过干，韧性可能受影响。'}</span>`
+  }[result];
+
+  openModal(`
+    <h2>☀️ 晒纸场 · 晾晒结果</h2>
+    <p>${resultText}</p>
+    ${result === "perfect" ? `<p style="color:var(--jade);font-weight:700;">干燥状态合适，纸面更平整柔韧，品质得到提升。</p>` : ""}
+    ${makeReportHtml(state.lastPaper)}
+    <div class="modal-actions">
+      <button class="primary-btn" type="button" data-action="close">带着好纸去书画铺</button>
     </div>
-  `;
+  `);
+  // 解锁科普卡
+  if (!state.unlockedCards.has("晒纸工艺")) state.unlockedCards.add("晒纸工艺");
+}
+
+function refreshDryingWeather() {
+  // 重新尝试——清除天气，重新打开晒纸场
+  openDryingYard();
 }
 
 function openArtShop() {
-  if (!state.lastPaper) {
-    openModal(`
-      <h2>书画铺</h2>
-      <p>书法家正在挑纸，但你还没有可交付的宣纸。</p>
-      <p>先去工坊完成抄纸，拿到检测报告后再来接待顾客。</p>
-      <div class="modal-actions">${closeBtn("返回地图")}</div>
-    `);
-    return;
-  }
-
-  const stats = state.lastPaper.stats;
-  const enough = stats.ink >= 75 && stats.evenness >= 75 && stats.toughness >= 70;
-  const current = `
-    <div class="order-list">
-      <span>吸墨性 >= 75 <strong>当前 ${stats.ink}</strong></span>
-      <span>均匀度 >= 75 <strong>当前 ${stats.evenness}</strong></span>
-      <span>韧性 >= 70 <strong>当前 ${stats.toughness}</strong></span>
-    </div>
-  `;
-
-  if (state.orderComplete) {
-    openModal(`
-      <h2>书画铺</h2>
-      <p>书法家正在试墨，对你的纸很满意。</p>
-      <p>下一站可以去非遗馆查看已经解锁的科普卡。</p>
-      ${current}
-      <div class="modal-actions">${closeBtn("返回地图")}</div>
-    `);
-    return;
-  }
-
-  openModal(`
-    <h2>书画铺：书法家订单</h2>
-    <p>书法家说：“我想买一张适合写行草的宣纸。纸要吸墨稳定，纸面均匀，也不能太容易破。”</p>
-    <h3>订单要求</h3>
-    ${current}
-    <div class="modal-actions">
-      <button class="primary-btn" type="button" data-action="${enough ? "deliverOrder" : "failOrder"}">交付这张宣纸</button>
-      <button class="secondary-btn" type="button" data-action="close">稍后再来</button>
-    </div>
-  `);
+  // 重定向到新订单系统
+  openOrderBoard();
 }
 
 function deliverOrder() {
@@ -1402,7 +2597,379 @@ function failOrder() {
   `);
 }
 
-function openMuseum() {
+// ========================================
+// 工坊升级购买
+// ========================================
+function buyUpgrade(upgradeId) {
+  const def = UPGRADES[upgradeId];
+  if (!def || state.upgrades[upgradeId]) return;
+  if (state.coins < def.cost) {
+    showToast(`金币不足！需要 ${def.cost} 金币，当前只有 ${state.coins}。`);
+    return;
+  }
+  state.coins -= def.cost;
+  state.upgrades[upgradeId] = true;
+  updateHud();
+  showToast(`✅ 升级成功：${def.name}！`);
+  // 刷新工坊面板
+  openWorkshop();
+}
+
+function buyFestivalItem(itemId) {
+  const items = {
+    luckyCharm: { cost: 5, name: "幸运符", msg: "下一张纸全属性+5%！" },
+    craftsmanNote: { cost: 10, name: "匠人手记", msg: "随机解锁一张科普卡！" },
+    bambooOil: { cost: 8, name: "竹帘护养油", msg: "下5张纸Perfect判定区扩大！" }
+  };
+  const item = items[itemId];
+  if (!item || (state.paperCoins || 0) < item.cost) return;
+
+  state.paperCoins -= item.cost;
+  if (itemId === "luckyCharm") state.festivalBuffs.luckyCharm += 1;
+  if (itemId === "bambooOil") state.festivalBuffs.bambooOil += 5;
+  if (itemId === "craftsmanNote") {
+    const locked = cardData.filter(c => !state.unlockedCards.has(c.id));
+    if (locked.length > 0) state.unlockedCards.add(locked[Math.floor(Math.random() * locked.length)].id);
+  }
+  updateHud();
+  showToast(`🪙 ${item.msg}`);
+  openWorkshop();
+}
+
+// ========================================
+// 订单系统：生成 + 接单 + 交付
+// ========================================
+function generateOrder(excludeNpcs = []) {
+  // 根据声望过滤可用订单，排除已有NPC
+  const available = ORDER_TYPES.filter(o => {
+    if (!o.unlockRep) return true;
+    return state.reputation >= o.unlockRep;
+  }).filter(o => !excludeNpcs.includes(o.npc));
+  // 如果排除后空了，回退到全部可用
+  const pool = available.length > 0 ? available : ORDER_TYPES.filter(o => {
+    if (!o.unlockRep) return true;
+    return state.reputation >= o.unlockRep;
+  });
+  const order = JSON.parse(JSON.stringify(pool[Math.floor(Math.random() * pool.length)]));
+  order.id = order.id + "_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
+  return order;
+}
+
+function openOrderBoard() {
+  // 首次打开时生成订单列表
+  if (state.orderQueue.length === 0) {
+    const usedNpcs = [];
+    if (state.storyChapter === 1 && state.ordersCompleted === 0) {
+      const introOrder = JSON.parse(JSON.stringify(ORDER_TYPES.find((order) => order.id === "calligraphyMaster")));
+      introOrder.id = `${introOrder.id}_${Date.now()}_intro`;
+      state.orderQueue.push(introOrder);
+      usedNpcs.push(introOrder.npc);
+    }
+    for (let i = state.orderQueue.length; i < 3; i++) {
+      const order = generateOrder(usedNpcs);
+      state.orderQueue.push(order);
+      usedNpcs.push(order.npc);
+    }
+  }
+  const orderHtml = state.orderQueue.map((order, idx) => {
+    const canDeliver = state.lastPaper && checkOrderRequirements(order, state.lastPaper.stats);
+    const judged = state.orderJudgments.has(order.id);
+    const locked = order.unlockRep && state.reputation < order.unlockRep;
+    const typeClass = order.id.includes("timed") ? "order-type--timed" : order.id.includes("premium") || order.unlockRep >= 25 ? "order-type--premium" : "";
+    return `
+      <div class="order-card ${locked ? "order-locked" : ""}">
+        <div class="order-header">
+          <span class="order-type ${typeClass}">${order.name}</span>
+          <span class="order-npc">👤 ${order.npc}</span>
+        </div>
+        ${order.dialogue ? `<blockquote class="order-npc-dialogue">"${order.dialogue}"</blockquote>` : ""}
+        ${judged ? `<p class="order-paper-case"><b>判断正确：</b>${order.paperType || "按纸性制作"}<br><span><b>工艺原因：</b>${order.scienceTip || "根据用途判断纸性。"}</span></p>` : ""}
+        <div class="order-req">
+          ${Object.entries(order.requirements).map(([k, v]) => {
+            const labels = { toughness: "韧性", ink: "吸墨", evenness: "均匀", whiteness: "洁白", durability: "耐久" };
+            return `<span>${labels[k]} ≥ ${v}</span>`;
+          }).join("")}
+        </div>
+        <div class="order-reward">
+          <span>💰 ${order.reward.gold}</span>
+          <span>⭐ ${order.reward.reputation}</span>
+        </div>
+        ${locked ? `<button class="primary-btn order-accept-btn" type="button" disabled>🔒 需要声望${order.unlockRep}</button>` : !judged ? `<button class="primary-btn order-accept-btn" type="button" data-action="openOrderPaperChoice" data-order-id="${order.id}">判断用纸</button>` : `<button class="primary-btn order-accept-btn" type="button" data-action="acceptOrder" data-order-id="${order.id}">${canDeliver ? "📦 交付此单" : "去工坊按要求制纸"}</button>`}
+      </div>
+    `;
+  }).join("");
+
+  openModal(`
+    <section class="order-board" aria-labelledby="orderBoardTitle">
+      <header class="order-board-header">
+        <p class="order-board-kicker">📜 书画铺 · 订单看板</p>
+        <h2 id="orderBoardTitle">老街坊的订单</h2>
+        <p>每一单都是一道用纸案例：先听需求，再判断纸性，做对纸才真正帮得上老街坊。</p>
+        <p style="font-size:12px;color:var(--wood);margin:0;">📖 完成关键委托会让《纸谱十二笺》归位。</p>
+      </header>
+      <div class="order-list-scroll">${orderHtml}</div>
+      <div class="modal-actions">
+        <button class="secondary-btn" type="button" data-action="close">返回地图</button>
+        <button class="primary-btn" type="button" data-action="refreshOrders">🔄 刷新订单</button>
+      </div>
+    </section>
+  `);
+}
+
+function refreshOrders() {
+  state.orderQueue = [];
+  const usedNpcs = [];
+  for (let i = 0; i < 3; i++) {
+    const order = generateOrder(usedNpcs);
+    state.orderQueue.push(order);
+    usedNpcs.push(order.npc);
+  }
+  openOrderBoard();
+}
+
+function checkOrderRequirements(order, stats) {
+  return Object.entries(order.requirements).every(([key, val]) => (stats[key] || 0) >= val);
+}
+
+function getOrderSlipId(order) {
+  if (order.id.startsWith("calligraphyMaster")) return "ink-door";
+  if (order.id.startsWith("masterLi")) return "half-cooked";
+  if (order.id.startsWith("premiumCourt")) return "glue-alum";
+  if (order.id.startsWith("mountMaster")) return "millennium";
+  return null;
+}
+
+function tryUnlockWaxSlipFromOrder(order) {
+  if (
+    state.storyChapter >= 2 &&
+    order &&
+    (order.id === "collectorChen" || order.id === "premiumCourt") &&
+    !state.unlockedKnowledgeCards.has("wax")
+  ) {
+    unlockPaperSlip("wax");
+    showToast("纸谱残页归位：粉蜡细线");
+  }
+}
+
+function openOrderPaperChoice(orderId, feedback = "") {
+  const order = state.orderQueue.find((item) => item.id === orderId);
+  if (!order) return;
+  const options = ["生宣", "熟宣", "半熟宣"].map((paper) => `<button class="story-choice-option" type="button" data-action="answerOrderPaperChoice" data-order-id="${order.id}" data-paper-type="${paper}">${paper}</button>`).join("");
+  openModal(`
+    <section class="story-choice-card" aria-labelledby="orderChoiceTitle">
+      <p class="story-choice-kicker">纸境千年 · 用纸判断</p>
+      <h2 id="orderChoiceTitle">${order.npc}的用纸委托</h2>
+      <blockquote>${order.dialogue || "这位街坊需要一张合适的纸。"}</blockquote>
+      <p class="story-choice-question">应该为他推荐哪种纸？</p>
+      ${feedback ? `<p class="story-choice-hint">${feedback}</p>` : ""}
+      <div class="story-choice-options">${options}</div>
+      <button class="festival-text-btn" type="button" data-action="openOrderBoard">回到订单看板</button>
+    </section>
+  `, "modal", "story-choice-modal");
+}
+
+function answerOrderPaperChoice(orderId, paperType) {
+  const order = state.orderQueue.find((item) => item.id === orderId);
+  if (!order) return;
+  if (paperType !== order.paperType) {
+    openOrderPaperChoice(orderId, "再想想：先看这位客人要的是墨色变化、线条稳定，还是两者之间的平衡。");
+    return;
+  }
+  state.orderJudgments.add(orderId);
+  showToast("判断正确：现在可以按需求制作并交付。");
+  openOrderBoard();
+}
+
+function acceptOrder(orderId) {
+  const order = state.orderQueue.find(o => o.id === orderId);
+  if (!order) return;
+  if (!state.orderJudgments.has(orderId)) {
+    showToast("先完成“判断用纸”，再准备交付。");
+    return;
+  }
+  if (!state.lastPaper) {
+    showToast("你还没有制作的宣纸！先去工坊制作一张。");
+    return;
+  }
+  if (!checkOrderRequirements(order, state.lastPaper.stats)) {
+    showToast("这张纸不符合订单要求，请重新制作！");
+    return;
+  }
+  // 交付成功
+  state.coins += order.reward.gold;
+  state.reputation += order.reward.reputation;
+  state.ordersCompleted += 1;
+  const slipId = getOrderSlipId(order);
+  if (slipId) unlockPaperSlip(slipId);
+  tryUnlockWaxSlipFromOrder(order);
+  state.orderQueue = state.orderQueue.filter(o => o.id !== orderId);
+  state.orderJudgments.delete(orderId);
+  state.task = "继续制作或查看非遗馆";
+  state.lastPaper = null;
+  updateHud();
+
+  // 主线章节推进检查
+  const chapterEvent = checkStoryProgress();
+  if (chapterEvent) {
+    openModal(chapterEvent, "modal", "story-chapter-modal");
+    return;
+  }
+
+  // NPC专属对话与科普
+  const npcDialogue = order.dialogue || '"这张纸不错，正合我用。"';
+  const scienceTip = order.scienceTip || '宣纸有"千年寿纸"之誉，因其原料富含纤维素、采用碱性制浆，不易酸化。';
+
+  openModal(`
+    <section class="reward-panel" aria-labelledby="rewardTitle">
+      <div class="reward-lantern" aria-hidden="true"></div>
+      <p class="reward-kicker">📜 ${order.npc}</p>
+      <h2 id="rewardTitle">订单完成！</h2>
+      <blockquote class="reward-quote">${npcDialogue}</blockquote>
+      <div class="reward-items">
+        <span class="result-badge result-badge--perfect">金币 +${order.reward.gold}</span>
+        <span class="result-badge result-badge--good">声望 +${order.reward.reputation}</span>
+      </div>
+      <div class="reward-science">
+        <span class="reward-science-icon">📖</span>
+        <p>${scienceTip}</p>
+      </div>
+      <div class="modal-actions">
+        ${closeBtn("继续制作", "primary-btn")}
+        <button class="secondary-btn" type="button" data-action="openOrderBoard">查看新订单</button>
+      </div>
+    </section>
+  `);
+}
+
+// ========================================
+// 主线剧情章节推进
+// ========================================
+function checkLegacyStoryProgress() {
+  const ch = state.storyChapter;
+  const rep = state.reputation;
+  const orders = state.ordersCompleted;
+  const cards = state.unlockedCards.size;
+  const stamps = state.earnedStamps.size;
+  const festivalDone = festivalProgress();
+
+  // ========================================
+  // 第一章：初识宣纸 → 完成第一个订单
+  // ========================================
+  if (ch === 1 && orders >= 1) {
+    state.storyChapter = 2;
+    return `
+      <section class="reward-panel" aria-labelledby="storyTitle">
+        <div class="reward-lantern" aria-hidden="true"></div>
+        <p class="reward-kicker">📖 第一章完</p>
+        <h2 id="storyTitle">老街坊的信任</h2>
+        <blockquote class="reward-quote">外婆拄着拐杖走过老街石桥："你做的纸被书法家王大爷夸了。街坊们开始注意你了——去纸境千年集市看看，那里有懂纸的行家，能教你不少东西。"</blockquote>
+        <div class="reward-science">
+          <span class="reward-science-icon">🎯</span>
+          <p><strong>第二章：</strong>探究纸境千年集市，找四位行家聊聊纸；声望提到25解锁精品订单。晒纸场别忘了——晾晒能提升品质。</p>
+        </div>
+        <div class="modal-actions">
+          <button class="primary-btn" type="button" data-action="close">继续</button>
+        </div>
+      </section>
+    `;
+  }
+
+  // ========================================
+  // 第二章：探集市+声望25
+  // ========================================
+  if (ch === 2 && rep >= 25 && festivalDone >= 1) {
+    state.storyChapter = 3;
+    return `
+      <section class="reward-panel" aria-labelledby="storyTitle">
+        <div class="reward-lantern" aria-hidden="true"></div>
+        <p class="reward-kicker">📖 第二章完</p>
+        <h2 id="storyTitle">纸境的秘密</h2>
+        <blockquote class="reward-quote">宫廷画师派侍从来订纸："画师大人说，能做出这种纸的人，老街又出一个。"纸境千年的行家们也对你的见识点头称赞。</blockquote>
+        <div class="reward-science">
+          <span class="reward-science-icon">🎯</span>
+          <p><strong>第三章：</strong>声望提到50解锁定制订单；收集6张以上科普卡；完成纸境千年全部四个问题。你已真正懂得宣纸的门道。</p>
+        </div>
+        <div class="modal-actions">
+          <button class="primary-btn" type="button" data-action="close">继续</button>
+        </div>
+      </section>
+    `;
+  }
+
+  // ========================================
+  // 第三章：声望50 + 6科普卡 + 4集市问答
+  // ========================================
+  if (ch === 3 && rep >= 50 && cards >= 6 && stamps >= 4) {
+    state.storyChapter = 4;
+    return `
+      <section class="reward-panel" aria-labelledby="storyTitle">
+        <div class="reward-lantern" aria-hidden="true"></div>
+        <p class="reward-kicker">📖 第三章完</p>
+        <h2 id="storyTitle">老街的传承</h2>
+        <blockquote class="reward-quote">外婆坐在宣纸铺门口，翻着你做的纸和集满的科普卡，眼睛有点红："孩子，宣纸的手艺不是什么秘密，它就是这条老街、这些人、这些年的事。你接过了它，它就能再传一千年。集齐12张科普卡，把老街的故事讲给更多人听吧。"</blockquote>
+        <div class="reward-science">
+          <span class="reward-science-icon">🏆</span>
+          <p><strong>终章：</strong>收集全部12张科普卡。你已经是老街最好的宣纸匠人——但学问永无止境。去非遗馆看看你还差哪几张。</p>
+        </div>
+        <div class="modal-actions">
+          <button class="primary-btn" type="button" data-action="close">继续</button>
+        </div>
+      </section>
+    `;
+  }
+
+  return null;
+}
+
+function storyChapterEvent(label, text) {
+  return `
+    <section class="story-chapter-banner" aria-labelledby="storyChapterTitle">
+      <img src="${STORY_ASSETS.grandmaNote}" alt="" onerror="this.onerror=null;this.hidden=true">
+      <p>《纸谱十二笺》 · ${label}</p>
+      <h2 id="storyChapterTitle">${getStoryChapterTitle()}</h2>
+      <blockquote>${text}</blockquote>
+      <button class="primary-btn" type="button" data-action="close">继续走走</button>
+    </section>
+  `;
+}
+
+function checkStoryProgress() {
+  const has = (id) => state.unlockedKnowledgeCards.has(id);
+  if (state.storyChapter === 1 && state.storyMilestones.paperBookOpened && state.storyMilestones.paperShopExam && state.storyMilestones.workshopMade && state.ordersCompleted >= 1) {
+    state.storyChapter = 2;
+    updateStoryTask();
+    return storyChapterEvent("第一章完", "王大爷接过纸，轻轻抖了抖：‘纸面匀，墨也吃得住。你外婆这铺子，后继有人了。’外婆站在门口笑了笑：‘老街开始听见你的名字了。’");
+  }
+  if (state.storyChapter === 2 && state.storyMilestones.qingtanVisited && state.storyMilestones.riceVisited && state.ordersCompleted >= 2) {
+    state.storyChapter = 3;
+    updateStoryTask();
+    return storyChapterEvent("第二章完", "宣屿把纸轻轻摊开，第一次觉得它不像一件商品。它有山里的筋骨，也有田里的肌理。");
+  }
+  if (state.storyChapter === 3 && has("bamboo-screen") && has("drying") && has("crafts") && paperSlipCount() >= 6) {
+    state.storyChapter = 4;
+    updateStoryTask();
+    return storyChapterEvent("第三章完", "非遗馆最里面的展柜亮了一半。玻璃上浮现出外婆年轻时的字迹：‘纸有筋骨，人有手艺。若有人愿意继续做，老街便不会老。’");
+  }
+  if (state.storyChapter === 4 && paperSlipCount() === PAPER_SLIPS.length && festivalProgress() === festivalTasks.length && state.ordersCompleted >= 4 && state.storyMilestones.museumVisited && !state.finaleShown) {
+    state.finaleShown = true;
+    state.coins += 300;
+    state.reputation += 100;
+    updateStoryTask();
+    return `
+      <section class="story-finale" aria-labelledby="storyFinaleTitle">
+        <img src="${STORY_ASSETS.museumDisplay}" alt="非遗馆展柜亮起" onerror="this.onerror=null;this.hidden=true">
+        <p>纸境千年 · 重新开馆</p>
+        <h2 id="storyFinaleTitle">十二笺归位，老街重亮</h2>
+        <blockquote>非遗馆的十二个展柜一盏盏亮起。有人看原料，有人看工艺，有孩子趴在柜台前问：‘宣纸为什么能保存这么久？’<br><br>外婆没有回答，只是看向宣屿。宣屿把第一张自己做的纸放进展柜旁边，轻声说：‘因为有人记得，也有人继续做。’</blockquote>
+        <div class="reward-items"><span>获得称号：新一代守纸人</span><span>老街声望 +100</span><span>金币 +300</span></div>
+        <div class="modal-actions"><button class="primary-btn" type="button" data-action="close">继续探索老街</button><button class="secondary-btn" type="button" data-action="openPaperCodex">查看纸谱十二笺</button></div>
+      </section>
+    `;
+  }
+  return null;
+}
+
+function openLegacyMuseum() {
   const cardsHtml = cardData.map((card) => {
     const unlocked = state.unlockedCards.has(card.id);
     return `
@@ -1422,6 +2989,25 @@ function openMuseum() {
 
   const unlockedCount = cardData.filter((c) => state.unlockedCards.has(c.id)).length;
 
+  // 集市问答知识卡
+  const festivalCards = festivalTasks.map(task => {
+    const done = state.completedFestivalTasks.has(task.id);
+    return `
+      <article class="science-card market-card ${done ? "unlocked" : "locked"}" aria-label="${done ? task.stall : "未解锁集市知识"}">
+        <div class="science-card-icon-wrap">
+          <span class="market-stamp" aria-hidden="true">${done ? "🏷️" : "🔒"}</span>
+        </div>
+        <div class="science-card-content">
+          <h3>${done ? `「${task.stamp}」` : "？？？"}<small> ${task.stall} · ${task.npc}</small></h3>
+          <p>${done ? task.correctText : "前往纸境千年集市，与这位行家交谈并答对问题即可解锁。"}</p>
+        </div>
+        <span class="tag science-card-status">${done ? "已集印" : "待探访"}</span>
+      </article>
+    `;
+  }).join("");
+
+  const festivalDone = festivalTasks.filter(t => state.completedFestivalTasks.has(t.id)).length;
+
   openModal(`
     <section class="museum-panel" aria-labelledby="museumTitle">
       <header class="museum-header">
@@ -1434,6 +3020,18 @@ function openMuseum() {
         </div>
       </header>
       <div class="cards-grid">${cardsHtml}</div>
+
+      <div class="museum-divider"></div>
+      <header class="museum-header museum-header--market">
+        <p class="museum-kicker">纸境千年</p>
+        <h3>集市问答 · 行家金句</h3>
+        <p>在纸境千年集市里与四位行家交谈，答对他们的问题，他们的智慧就会收录于此。</p>
+        <div class="museum-progress">
+          <span>已收集 <strong>${festivalDone}</strong> / ${festivalTasks.length} 条</span>
+          <div class="museum-progress-bar"><div class="museum-progress-fill" style="width:${Math.round(festivalDone / festivalTasks.length * 100)}%"></div></div>
+        </div>
+      </header>
+      <div class="cards-grid">${festivalCards}</div>
       <div class="modal-actions">${closeBtn("返回地图")}</div>
     </section>
   `);
@@ -1469,16 +3067,70 @@ function setDebugMode(enabled) {
   updateMap();
 }
 
+function openPaperCodex() {
+  const count = paperSlipCount();
+  const slips = PAPER_SLIPS.map((slip) => {
+    const unlocked = state.unlockedKnowledgeCards.has(slip.id);
+    const art = unlocked ? (STORY_ASSETS[slip.icon] || STORY_ASSETS.paperSlip) : STORY_ASSETS.lockedSlip;
+    return `
+      <article class="paper-codex-card ${unlocked ? "is-unlocked" : "paper-codex-locked"}">
+        <img src="${art}" alt="" onerror="this.onerror=null;this.hidden=true">
+        <div><small>${unlocked ? "已归位" : "未归位"}</small><h3>${unlocked ? slip.title : "残页未现"}</h3><p>${unlocked ? slip.shortText : `线索：${slip.unlockBy}`}</p>${unlocked ? `<span>${slip.relatedLocation}</span>` : ""}</div>
+      </article>`;
+  }).join("");
+  openModal(`
+    <section class="paper-codex-panel" aria-labelledby="paperCodexTitle">
+      <header class="paper-codex-header">
+        <img src="${STORY_ASSETS.paperCodexBook}" alt="打开的纸谱" onerror="this.onerror=null;this.hidden=true">
+        <div><p>非遗馆 · 外婆手录</p><h2 id="paperCodexTitle">《纸谱十二笺》</h2><span>纸谱归位：<b>${count} / ${PAPER_SLIPS.length}</b></span></div>
+      </header>
+      <p class="paper-codex-intro">十二张残页散在老街的人、手艺与记忆里。懂得纸性，才能替人用对纸，也才能让它们归位。</p>
+      <div class="paper-codex-grid">${slips}</div>
+      <div class="modal-actions">${closeBtn("返回老街")}</div>
+    </section>
+  `, "modal", "paper-codex-modal");
+}
+
+function openMuseum() {
+  state.storyMilestones.museumVisited = true;
+  if (paperPageCount() >= 6 && !state.completedQuests.has("museum")) {
+    openQuest("museum");
+    return;
+  }
+  const chapterEvent = checkStoryProgress();
+  if (chapterEvent) {
+    openModal(chapterEvent, "modal", "story-chapter-modal");
+    return;
+  }
+  openPaperPagesCodex();
+}
+
 function handleAction(action, dataset = {}) {
   if (action === "close") closeModal();
   if (action === "retryWorkshop") openWorkshop();
-  if (action === "deliverOrder") deliverOrder();
-  if (action === "failOrder") failOrder();
-  if (action === "stopMiniGame") stopMiniGame();
+  if (action === "stopMiniGame" || action === "advancePhase") stopMiniGame();
+  if (action === "openPaperShop") openPaperShop();
+  if (action === "openPaperCodex") openPaperCodex();
+  if (action === "openPaperPagesCodex") openPaperPagesCodex();
+  if (action === "openQuest") openQuest(dataset.questId);
+  if (action === "answerQuest") answerQuest(dataset.questId, dataset.option);
+  if (action === "openStoryChoice") openStoryChoice(dataset.caseId);
+  if (action === "answerStoryChoice") answerStoryChoice(dataset.slipId, dataset.option);
   if (action === "switchPaperType") openPaperShop(dataset.paperId);
   if (action === "enterFestival" || action === "openPaperFestival") openPaperFestival();
   if (action === "openFestivalTask") openFestivalTask(dataset.taskId);
   if (action === "answerFestivalTask") answerFestivalTask(dataset.taskId, dataset.option);
+  if (action === "buyUpgrade") buyUpgrade(dataset.upgradeId);
+  if (action === "buyFestivalItem") buyFestivalItem(dataset.itemId);
+  if (action === "openFestivalExchange") openFestivalExchange();
+  if (action === "openOrderBoard") openOrderBoard();
+  if (action === "openOrderPaperChoice") openOrderPaperChoice(dataset.orderId);
+  if (action === "answerOrderPaperChoice") answerOrderPaperChoice(dataset.orderId, dataset.paperType);
+  if (action === "acceptOrder") acceptOrder(dataset.orderId);
+  if (action === "refreshOrders") refreshOrders();
+  if (action === "openDryingYard") openDryingYard();
+  if (action === "dryPaper") dryPaper();
+  if (action === "refreshDryingWeather") openDryingYard();
 }
 
 function handlePauseAction(action) {
@@ -1510,10 +3162,30 @@ mobilePauseButton?.addEventListener("click", (event) => {
   if (state.gameState === "playing") openPauseMenu();
 });
 
+paperPagesButton?.addEventListener("click", () => openPaperPagesCodex());
+
 interactionPrompt.addEventListener("click", (event) => {
   event.preventDefault();
   event.stopPropagation();
-  if (state.gameState === "playing" && state.activeZone) activateZone(state.activeZone);
+  if (state.gameState !== "playing") return;
+  const nearbyNpc = getNearbyNpcDialogue();
+  if (nearbyNpc) advanceNpcDialogue(nearbyNpc.id);
+  else if (state.activeZone) activateZone(state.activeZone);
+});
+
+document.querySelectorAll("[data-npc-dialogue]").forEach((npc) => {
+  npc.addEventListener("click", (event) => {
+    if (state.gameState !== "playing") return;
+    event.preventDefault();
+    event.stopPropagation();
+    advanceNpcDialogue(npc.dataset.npcDialogue);
+  });
+  npc.addEventListener("keydown", (event) => {
+    if (event.code !== "Enter" && event.code !== "Space") return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (state.gameState === "playing") advanceNpcDialogue(npc.dataset.npcDialogue);
+  });
 });
 
 mapViewport.addEventListener("click", (event) => {
@@ -1603,7 +3275,15 @@ document.addEventListener("touchmove", (event) => {
   event.preventDefault();
 }, { passive: false });
 
+function isTextEntryTarget(target = document.activeElement) {
+  if (!(target instanceof HTMLElement)) return false;
+  return target.isContentEditable || target.matches("input, textarea, select, [contenteditable='true']");
+}
+
 window.addEventListener("keydown", (event) => {
+  // 输入框中的 Esc 交给控件自身处理，不能意外退出当前页面。
+  if (event.code === "Escape" && isTextEntryTarget(event.target)) return;
+
   if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Space", "F2", "F3", "Escape"].includes(event.code)) {
     event.preventDefault();
   }
@@ -1620,8 +3300,7 @@ window.addEventListener("keydown", (event) => {
     return;
   }
   if (event.code === "Escape") {
-    if (state.gameState === "modal" || state.gameState === "minigame") closeModal();
-    else if (state.gameState === "paused") closePauseMenu();
+    if (state.currentPage !== "map") goBackPage();
     else if (state.gameState === "playing") openPauseMenu();
     return;
   }
@@ -1631,7 +3310,12 @@ window.addEventListener("keydown", (event) => {
     return;
   }
   if (state.gameState !== "playing") return;
-  if (event.code === "KeyE") {
+  if (event.code === NPC_INTERACT_KEY_CODE) {
+    const nearbyNpc = getNearbyNpcDialogue();
+    if (nearbyNpc) advanceNpcDialogue(nearbyNpc.id);
+    return;
+  }
+  if (event.code === INTERACT_KEY_CODE) {
     interact();
     return;
   }
