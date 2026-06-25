@@ -869,7 +869,7 @@ function unlockPaperSlip(id) {
   return true;
 }
 
-function openPaperSlipReward(slipId, afterAction = "close") {
+function openPaperSlipReward(slipId, afterAction = "close", replaceCurrent = false) {
   const slip = getPaperSlip(slipId);
   if (!slip) return;
   unlockPaperSlip(slipId);
@@ -887,11 +887,11 @@ function openPaperSlipReward(slipId, afterAction = "close") {
       <h3>${slip.title}</h3>
       <p>${slip.shortText}</p>
       <div class="modal-actions">
-        <button class="primary-btn" type="button" data-action="${afterAction}">收进纸谱</button>
+        <button class="primary-btn" type="button" data-action="${afterAction}">${afterAction === "openPaperShop" ? "打开宣纸铺" : "收进纸谱"}</button>
         <button class="secondary-btn" type="button" data-action="openPaperCodex">前往非遗馆查看</button>
       </div>
     </section>
-  `, "modal", "paper-slip-reward-modal");
+  `, "modal", "paper-slip-reward-modal", { replace: replaceCurrent });
 }
 
 function openStoryChoice(caseId, feedback = "") {
@@ -928,7 +928,7 @@ function answerStoryChoice(slipId, option) {
   if (slipId === "qingtan-bark") state.storyMilestones.qingtanVisited = true;
   if (slipId === "rice-straw") state.storyMilestones.riceVisited = true;
   if (slipId === "ink-door") completeQuest("paperShop");
-  openPaperSlipReward(slipId);
+  openPaperSlipReward(slipId, slipId === "ink-door" ? "openPaperShop" : "close", true);
 }
 
 function updateStoryTask() {
@@ -1414,14 +1414,14 @@ function activateZone(zone) {
   else openComingSoon(zone);
 }
 
-function openModal(html, nextState = "modal", cardClass = "") {
+function openModal(html, nextState = "modal", cardClass = "", pageOptions = {}) {
   // 保留原有调用点，实际入口统一转交给页面栈。
   const pageId = html.match(/aria-labelledby="([^"]+)"/)?.[1];
   const heading = html.match(/<h[1-3][^>]*>\s*([^<]+)/)?.[1]?.trim();
   const pageName = pageId
     ? `${cardClass || "modal"}:${pageId}`
     : `${cardClass || "modal"}:${heading || "page"}`;
-  openPage(pageName, { type: "modal", html, nextState, cardClass });
+  openPage(pageName, { type: "modal", html, nextState, cardClass, ...pageOptions });
 }
 
 function closeModal() {
