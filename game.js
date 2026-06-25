@@ -1654,7 +1654,10 @@ function renderPaperBook(paperId = "shengxuan") {
 
 function openPaperShop(paperId = "shengxuan") {
   const paper = paperBookGroups.flatMap((group) => group.papers).find((item) => item.id === paperId) || paperShowcaseData[0];
-  const firstPaperBookVisit = !state.storyMilestones.paperBookOpened;
+  if (state.storyChapter === 1 && !state.storyMilestones.paperShopExam) {
+    openStoryChoice("ink");
+    return;
+  }
   state.hasVisitedPaperShop = true;
   state.unlockedPaperCategories.add(paper.id);
   state.unlockedPaperItems.add(`paper-type:${paper.id}`);
@@ -1662,9 +1665,6 @@ function openPaperShop(paperId = "shengxuan") {
   state.storyMilestones.paperBookOpened = true;
   updateStoryTask();
   renderPaperBook(paper.id);
-  if (firstPaperBookVisit && state.storyChapter === 1 && !state.storyMilestones.paperShopExam) {
-    window.setTimeout(() => openStoryChoice("ink"), 240);
-  }
 }
 
 const festivalTasks = [
