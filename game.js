@@ -1212,6 +1212,12 @@ function updateNpcDialogueBubbles() {
 function getNpcInteractionHint(id) {
   const dialogue = MARKET_NPC_DIALOGUES[id];
   const actionLabel = dialogue?.promptLabel || "交互 NPC";
+  return `按 ${NPC_INTERACT_KEY_LABEL} ${actionLabel}`;
+}
+
+function getNpcInteractionPrompt(id) {
+  const dialogue = MARKET_NPC_DIALOGUES[id];
+  const actionLabel = dialogue?.promptLabel || "交互 NPC";
   return `<span class="interaction-key">${NPC_INTERACT_KEY_LABEL}</span><span>${actionLabel}</span>`;
 }
 
@@ -1340,7 +1346,7 @@ function updateMap() {
     if (nearbyNpc && state.gameState === "playing") {
       interactionPrompt.innerHTML = isMobileInput()
         ? `点击${MARKET_NPC_DIALOGUES[nearbyNpc.id]?.name || "NPC"}`
-        : getNpcInteractionHint(nearbyNpc.id);
+        : getNpcInteractionPrompt(nearbyNpc.id);
       interactionPrompt.classList.remove("hidden");
     } else if (state.activeZone && state.gameState === "playing") {
       interactionPrompt.innerHTML = getInteractionPrompt(state.activeZone);
