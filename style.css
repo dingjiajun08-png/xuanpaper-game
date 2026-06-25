@@ -1223,77 +1223,6 @@ button {
   font-weight: 800;
 }
 
-.cards-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 18px;
-}
-
-.science-card {
-  min-height: 220px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  background: #f6ddaa;
-  border: 4px solid #3d271f;
-  padding: 14px;
-}
-
-.science-card.locked {
-  filter: grayscale(0.6);
-  opacity: 0.65;
-}
-
-.card-icon {
-  height: 74px;
-  margin-bottom: 12px;
-  border: 4px solid #3d271f;
-  background: #8ed0a9;
-  position: relative;
-}
-
-.icon-bark::before {
-  content: "";
-  position: absolute;
-  inset: 12px 28px;
-  background:
-    repeating-linear-gradient(0deg, #8e5838 0 8px, #5f3928 8px 12px);
-  border: 4px solid #3d271f;
-}
-
-.icon-scoop::before {
-  content: "";
-  position: absolute;
-  left: 32px;
-  right: 32px;
-  top: 18px;
-  bottom: 18px;
-  background:
-    repeating-linear-gradient(90deg, #fff6de 0 8px, #d6bd8e 8px 11px);
-  border: 4px solid #3d271f;
-}
-
-.icon-ink::before {
-  content: "";
-  position: absolute;
-  left: 44px;
-  top: 14px;
-  width: 36px;
-  height: 44px;
-  background: #28323a;
-  border: 4px solid #101417;
-  box-shadow: 28px 10px 0 #4c6372;
-}
-
-.science-card h3 {
-  margin-top: 0;
-}
-
-.science-card p {
-  font-size: 15px;
-}
-
 .toast {
   position: fixed;
   left: 50%;
@@ -1328,7 +1257,6 @@ button {
     flex-basis: 100%;
   }
 
-  .cards-grid,
   .report-grid {
     grid-template-columns: 1fr;
   }
@@ -1369,8 +1297,7 @@ button {
     font-size: 20px;
   }
 
-  .modal-card p,
-  .science-card p {
+  .modal-card p {
     font-size: 16px;
   }
 
@@ -2654,57 +2581,6 @@ button {
     margin-top: 12px;
   }
 
-  .cards-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 8px;
-    margin-top: 10px;
-  }
-
-  .science-card {
-    min-height: 132px;
-    padding: 8px;
-    border-width: 3px;
-  }
-
-  .card-icon {
-    height: 42px;
-    margin-bottom: 6px;
-    border-width: 3px;
-  }
-
-  .icon-bark::before {
-    inset: 8px 20px;
-    border-width: 3px;
-  }
-
-  .icon-scoop::before {
-    left: 22px;
-    right: 22px;
-    top: 10px;
-    bottom: 10px;
-    border-width: 3px;
-  }
-
-  .icon-ink::before {
-    left: 32px;
-    top: 8px;
-    width: 24px;
-    height: 28px;
-    border-width: 3px;
-    box-shadow: 18px 7px 0 #4c6372;
-  }
-
-  .science-card h3 {
-    margin-bottom: 5px;
-    font-size: 17px;
-    line-height: 1.2;
-  }
-
-  .science-card p {
-    font-size: 13px;
-    line-height: 1.35;
-  }
-
   .report-grid {
     grid-template-columns: repeat(auto-fit, minmax(74px, 1fr));
     gap: 7px;
@@ -2799,18 +2675,6 @@ button {
   .modal-card {
     width: min(92vw, 440px);
     max-height: 78vh;
-  }
-
-  .cards-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .science-card {
-    min-height: 0;
-  }
-
-  .card-icon {
-    height: 36px;
   }
 
   .paper-album-card {
@@ -5111,143 +4975,6 @@ button {
   color: var(--jade);
 }
 
-/* ========================================
-   非遗馆 — 升级版
-   ======================================== */
-
-.museum-panel {
-  padding: 2px 0 0;
-}
-
-.museum-header {
-  margin-bottom: 20px;
-  padding-bottom: 16px;
-  border-bottom: 3px solid var(--paper-dark);
-}
-
-.museum-kicker {
-  margin: 0 0 6px;
-  color: var(--brick);
-  font-size: 13px;
-  font-weight: 900;
-  letter-spacing: 2px;
-}
-
-.museum-header h2 {
-  margin: 0 0 6px;
-}
-
-.museum-header p {
-  margin: 0 0 12px;
-  color: var(--wood);
-}
-
-.museum-progress {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 14px;
-  font-weight: 800;
-  color: var(--ink);
-}
-
-.museum-progress-bar {
-  flex: 1;
-  height: 14px;
-  background: var(--paper-dark);
-  border: 3px solid var(--deep-ink);
-  overflow: hidden;
-}
-
-.museum-progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--jade), var(--jade-light));
-  transition: width 0.6s ease;
-}
-
-.science-card {
-  min-height: 200px;
-  display: flex;
-  flex-direction: column;
-  background: linear-gradient(180deg, #fff8e6, #f2dca9);
-  border: 4px solid var(--deep-ink);
-  padding: 0;
-  overflow: hidden;
-  transition: transform 0.12s, box-shadow 0.12s;
-}
-
-.science-card.unlocked {
-  box-shadow: 4px 4px 0 rgba(45, 36, 27, 0.18);
-}
-
-.science-card.unlocked:hover {
-  transform: translateY(-2px);
-  box-shadow: 6px 6px 0 rgba(45, 36, 27, 0.22);
-}
-
-.science-card.locked {
-  background: linear-gradient(180deg, #ece8de, #d4cdb5);
-  filter: none;
-  opacity: 0.75;
-}
-
-.science-card-icon-wrap {
-  position: relative;
-}
-
-.card-icon {
-  height: 70px;
-  border-bottom: 4px solid var(--deep-ink);
-  background: #8ed0a9;
-  position: relative;
-}
-
-.science-card.locked .card-icon {
-  background: #b8b09c;
-  filter: grayscale(1);
-}
-
-.science-card-unlocked-badge {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  background: var(--jade);
-  color: #fff;
-  border: 3px solid var(--deep-ink);
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.science-card-content {
-  flex: 1;
-  padding: 12px 14px 8px;
-}
-
-.science-card-content h3 {
-  margin: 0 0 6px;
-  font-size: 18px;
-  color: var(--brick-dark);
-}
-
-.science-card-content p {
-  margin: 0;
-  font-size: 14px;
-  line-height: 1.6;
-  color: var(--wood);
-}
-
-.science-card-status {
-  margin: 0 14px 12px;
-  align-self: flex-start;
-  font-size: 12px;
-  min-height: 24px;
-}
-
 @media (max-width: 760px) {
   .report-bars {
     gap: 8px;
@@ -5259,18 +4986,6 @@ button {
 
   .reward-items {
     justify-content: flex-start;
-  }
-
-  .cards-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .science-card {
-    min-height: 160px;
-  }
-
-  .card-icon {
-    height: 54px;
   }
 
   .workshop-icon {
@@ -7557,11 +7272,6 @@ button {
   flex-wrap: wrap;
   gap: 4px;
 }
-.order-type {
-  font-weight: 900;
-  font-size: 15px;
-  color: var(--deep-ink);
-}
 .order-type--premium {
   color: var(--brick);
 }
@@ -7601,60 +7311,6 @@ button {
   font-size: 14px;
   font-weight: 700;
 }
-.order-reward span:first-child {
-  color: var(--gold);
-}
-.order-reward span:last-child {
-  color: var(--jade);
-}
-
-/* ========================================
-   非遗馆科普卡 - 增强展示
-   ======================================== */
-.cards-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 10px;
-  max-height: 380px;
-  overflow-y: auto;
-  padding: 4px 2px;
-}
-.science-card {
-  display: flex;
-  flex-direction: column;
-  padding: 14px;
-  background: rgba(255,246,222,0.5);
-  border: 3px solid var(--paper-dark);
-  transition: all 0.2s;
-}
-.science-card.unlocked {
-  border-color: var(--jade);
-  background: rgba(255,246,222,0.8);
-}
-.science-card.locked {
-  filter: grayscale(0.6);
-  opacity: 0.6;
-}
-.science-card-icon-wrap {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-.science-card-content h3 {
-  margin: 0 0 6px;
-  font-size: 15px;
-}
-.science-card-content p {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--wood);
-}
-
-/* ========================================
-   移动端适配
-   ======================================== */
 @media (max-width: 768px), (hover: none) and (pointer: coarse) {
   .workshop-upgrade-list {
     grid-template-columns: 1fr 1fr;
@@ -7668,10 +7324,6 @@ button {
   }
   .phase-review {
     font-size: 11px;
-  }
-  .cards-grid {
-    grid-template-columns: 1fr;
-    max-height: 300px;
   }
 }
 
@@ -7764,24 +7416,4 @@ button {
 .task-step--active {
   font-weight: 800;
   color: var(--gold);
-}
-
-/* 非遗馆集市分区 */
-.museum-divider {
-  border-top: 2px dashed var(--paper-dark);
-  margin: 16px 0;
-}
-.museum-header--market {
-  margin-top: 0;
-}
-.market-stamp {
-  font-size: 22px;
-  line-height: 1;
-}
-.science-card.market-card h3 small {
-  display: block;
-  font-weight: 400;
-  font-size: 11px;
-  color: var(--wood);
-  margin-top: 2px;
 }

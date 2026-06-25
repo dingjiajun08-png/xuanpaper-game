@@ -428,82 +428,19 @@ const ORDER_TYPES = [
   }
 ];
 
-// ========================================
-// 12张科普卡 — 覆盖原料、工艺、纸性、历史
-// ========================================
-const cardData = [
-  {
-    id: "青檀树皮",
-    icon: "icon-bark",
-    title: "青檀树皮",
-    text: "青檀树皮中的韧皮纤维较长，是宣纸具有较好韧性和耐久性的重要原因之一。青檀是中国特有树种，主要分布在皖南山区。树皮采割后还需经过蒸煮、漂洗、晒干等多道工序才能用于造纸。"
-  },
-  {
-    id: "沙田稻草",
-    icon: "icon-straw",
-    title: "沙田稻草",
-    text: "泾县特有的沙田稻草是宣纸的另一种重要原料。沙田稻草纤维较短，与青檀皮纤维交织，形成宣纸均匀细密的纸面结构。两种纤维的比例决定了纸张的最终性能。"
-  },
-  {
-    id: "抄纸手法",
-    icon: "icon-scoop",
-    title: "抄纸手法",
-    text: "抄纸时纸浆在竹帘上的分布是否均匀，会影响纸张厚薄、纹理和书写效果。工匠双手持竹帘框，以特定角度入水、振动、出水，全凭手感控制纸浆分布。一张好纸的背后是数万次的练习。"
-  },
-  {
-    id: "晒纸工艺",
-    icon: "icon-sun",
-    title: "晒纸工艺",
-    text: "湿纸需要在晒纸场上自然晾晒或烤干。传统晒纸使用焙笼（加热的弧形墙面），将湿纸一张张贴在焙笼上烘干。晒纸的温度、湿度、时间都会影响纸张的最终平整度和韧性。"
-  },
-  {
-    id: "吸墨性",
-    icon: "icon-ink",
-    title: "吸墨性",
-    text: "宣纸的吸墨效果与纤维结构、纸张孔隙和打浆程度有关。好的宣纸不是单纯吸水快，而是能让墨色自然渗化，在纸面产生浓淡、干湿、虚实的丰富变化——这就是'墨韵'。"
-  },
-  {
-    id: "纸寿千年",
-    icon: "icon-clock",
-    title: "纸寿千年",
-    text: "宣纸有'千年寿纸'的美誉。唐代写经纸、宋代书画纸至今仍保存完好，就是因为宣纸原料富含纤维素、制浆采用碱性工艺，纸张不易酸化老化。一张好的宣纸可以保存超过一千年。"
-  },
-  {
-    id: "生宣与熟宣",
-    icon: "icon-toggle",
-    title: "生宣与熟宣",
-    text: "生宣不经过胶矾加工，吸水快、洇墨明显，适合写意和泼墨。熟宣经过胶矾处理，吸水慢、线条稳，适合工笔和小楷。半熟宣介于两者之间，是新手入门和花鸟画的好选择。"
-  },
-  {
-    id: "七十二道工序",
-    icon: "icon-gear",
-    title: "七十二道工序",
-    text: "宣纸制作有'七十二道工序'之说。从原料采集到成品出纸，要经历蒸煮、漂洗、打浆、捞纸、晒纸、剪纸等上百个步骤，历时近一年。每一张宣纸都是时间、手艺和自然的结晶。"
-  },
-  {
-    id: "泾县宣纸",
-    icon: "icon-map",
-    title: "泾县宣纸",
-    text: "安徽泾县是宣纸的原产地和核心产区。这里的气候、水质、原料都适合宣纸制作。泾县宣纸始于唐代，至今已有1000多年的历史，2006年被列入第一批国家级非物质文化遗产名录。"
-  },
-  {
-    id: "墨分五色",
-    icon: "icon-palette",
-    title: "墨分五色",
-    text: "中国画讲究'墨分五色'——焦、浓、重、淡、清。在宣纸上，通过控制墨的水分和笔触力度，可以在一笔之间产生从浓到淡的渐变。这种效果是宣纸独特的纤维结构和吸墨性带来的。"
-  },
-  {
-    id: "非遗传承",
-    icon: "icon-heritage",
-    title: "非遗传承",
-    text: "宣纸制作技艺于2006年入选第一批国家级非物质文化遗产名录。如今仍有匠人坚守传统手工造纸。捞纸、晒纸等环节需要长期练习，许多判断依赖经验与手感。"
-  },
-  {
-    id: "书画同源",
-    icon: "icon-brushpen",
-    title: "书画同源",
-    text: "中国自古有'书画同源'之说。书法和绘画使用相同的工具——毛笔、墨、宣纸。宣纸的诞生让中国书画艺术有了独特的载体，墨在纸上的渗化效果是其他纸张无法替代的。"
-  }
+const legacyKnowledgeCardIds = [
+  "青檀树皮",
+  "沙田稻草",
+  "抄纸手法",
+  "晒纸工艺",
+  "吸墨性",
+  "纸寿千年",
+  "生宣与熟宣",
+  "七十二道工序",
+  "泾县宣纸",
+  "墨分五色",
+  "非遗传承",
+  "书画同源"
 ];
 
 // 《纸谱十二笺》：主线把科普放回到“帮人用对纸”的过程里。
@@ -757,10 +694,6 @@ function hideStartScreen() {
 
 function returnToStartScreen() {
   showStartScreen();
-}
-
-function resetGame() {
-  // Reserved for a future restart option.
 }
 
 function setMobileVH() {
@@ -1472,7 +1405,7 @@ function activateZone(zone) {
   if (zone.id === "paperShop") openPaperShop();
   else if (zone.id === "market") openFestivalEntrance();
   else if (zone.id === "workshop") openWorkshop();
-  else if (zone.id === "calligraphyShop") openArtShop();
+  else if (zone.id === "calligraphyShop") openOrderBoard();
   else if (zone.id === "museum") openMuseum();
   else if (zone.id === "qingtanForest" || zone.id === "qingtanForestTrail") openQuest("forest");
   else if (zone.id === "waterWheel") openQuest("waterwheel");
@@ -2545,58 +2478,6 @@ function dryPaper() {
   if (!state.unlockedCards.has("晒纸工艺")) state.unlockedCards.add("晒纸工艺");
 }
 
-function refreshDryingWeather() {
-  // 重新尝试——清除天气，重新打开晒纸场
-  openDryingYard();
-}
-
-function openArtShop() {
-  // 重定向到新订单系统
-  openOrderBoard();
-}
-
-function deliverOrder() {
-  if (state.orderComplete) return;
-  state.coins += 100;
-  state.reputation += 10;
-  state.orderComplete = true;
-  state.unlockedCards.add("抄纸手法");
-  state.task = "去非遗馆查看科普卡";
-  updateHud();
-  openModal(`
-    <section class="reward-panel" aria-labelledby="rewardTitle">
-      <div class="reward-lantern" aria-hidden="true"></div>
-      <p class="reward-kicker">顾客满意</p>
-      <h2 id="rewardTitle">书法家称赞了你！</h2>
-      <blockquote class="reward-quote">"这张纸吸墨稳定，纸面也匀。老街还有这样的手艺，真难得。"</blockquote>
-      <div class="reward-items">
-        <span class="result-badge result-badge--perfect">金币 +100</span>
-        <span class="result-badge result-badge--good">声望 +10</span>
-      </div>
-      <p class="reward-unlock">🔓 已解锁科普卡：<strong>抄纸手法</strong></p>
-      <div class="modal-actions">
-        ${closeBtn("去非遗馆看看")}
-        <button class="secondary-btn" type="button" data-action="retryWorkshop">继续制纸</button>
-      </div>
-    </section>
-  `);
-}
-
-function failOrder() {
-  state.task = "回工坊再试一张";
-  updateHud();
-  openModal(`
-    <h2>还差一点</h2>
-    <p>书法家轻轻摇头："这张纸还不够稳定。行草落笔快，纸面和吸墨都要更稳些。"</p>
-    <p>回工坊重新制作，争取让吸墨性、均匀度和韧性都达标。</p>
-    ${makeReportHtml(state.lastPaper)}
-    <div class="modal-actions">
-      <button class="primary-btn" type="button" data-action="retryWorkshop">回工坊再做一张</button>
-      ${closeBtn("返回地图", "danger-btn")}
-    </div>
-  `);
-}
-
 // ========================================
 // 工坊升级购买
 // ========================================
@@ -2628,8 +2509,8 @@ function buyFestivalItem(itemId) {
   if (itemId === "luckyCharm") state.festivalBuffs.luckyCharm += 1;
   if (itemId === "bambooOil") state.festivalBuffs.bambooOil += 5;
   if (itemId === "craftsmanNote") {
-    const locked = cardData.filter(c => !state.unlockedCards.has(c.id));
-    if (locked.length > 0) state.unlockedCards.add(locked[Math.floor(Math.random() * locked.length)].id);
+    const locked = legacyKnowledgeCardIds.filter((id) => !state.unlockedCards.has(id));
+    if (locked.length > 0) state.unlockedCards.add(locked[Math.floor(Math.random() * locked.length)]);
   }
   updateHud();
   showToast(`🪙 ${item.msg}`);
@@ -2844,83 +2725,6 @@ function acceptOrder(orderId) {
 // ========================================
 // 主线剧情章节推进
 // ========================================
-function checkLegacyStoryProgress() {
-  const ch = state.storyChapter;
-  const rep = state.reputation;
-  const orders = state.ordersCompleted;
-  const cards = state.unlockedCards.size;
-  const stamps = state.earnedStamps.size;
-  const festivalDone = festivalProgress();
-
-  // ========================================
-  // 第一章：初识宣纸 → 完成第一个订单
-  // ========================================
-  if (ch === 1 && orders >= 1) {
-    state.storyChapter = 2;
-    return `
-      <section class="reward-panel" aria-labelledby="storyTitle">
-        <div class="reward-lantern" aria-hidden="true"></div>
-        <p class="reward-kicker">📖 第一章完</p>
-        <h2 id="storyTitle">老街坊的信任</h2>
-        <blockquote class="reward-quote">外婆拄着拐杖走过老街石桥："你做的纸被书法家王大爷夸了。街坊们开始注意你了——去纸境千年集市看看，那里有懂纸的行家，能教你不少东西。"</blockquote>
-        <div class="reward-science">
-          <span class="reward-science-icon">🎯</span>
-          <p><strong>第二章：</strong>探究纸境千年集市，找四位行家聊聊纸；声望提到25解锁精品订单。晒纸场别忘了——晾晒能提升品质。</p>
-        </div>
-        <div class="modal-actions">
-          <button class="primary-btn" type="button" data-action="close">继续</button>
-        </div>
-      </section>
-    `;
-  }
-
-  // ========================================
-  // 第二章：探集市+声望25
-  // ========================================
-  if (ch === 2 && rep >= 25 && festivalDone >= 1) {
-    state.storyChapter = 3;
-    return `
-      <section class="reward-panel" aria-labelledby="storyTitle">
-        <div class="reward-lantern" aria-hidden="true"></div>
-        <p class="reward-kicker">📖 第二章完</p>
-        <h2 id="storyTitle">纸境的秘密</h2>
-        <blockquote class="reward-quote">宫廷画师派侍从来订纸："画师大人说，能做出这种纸的人，老街又出一个。"纸境千年的行家们也对你的见识点头称赞。</blockquote>
-        <div class="reward-science">
-          <span class="reward-science-icon">🎯</span>
-          <p><strong>第三章：</strong>声望提到50解锁定制订单；收集6张以上科普卡；完成纸境千年全部四个问题。你已真正懂得宣纸的门道。</p>
-        </div>
-        <div class="modal-actions">
-          <button class="primary-btn" type="button" data-action="close">继续</button>
-        </div>
-      </section>
-    `;
-  }
-
-  // ========================================
-  // 第三章：声望50 + 6科普卡 + 4集市问答
-  // ========================================
-  if (ch === 3 && rep >= 50 && cards >= 6 && stamps >= 4) {
-    state.storyChapter = 4;
-    return `
-      <section class="reward-panel" aria-labelledby="storyTitle">
-        <div class="reward-lantern" aria-hidden="true"></div>
-        <p class="reward-kicker">📖 第三章完</p>
-        <h2 id="storyTitle">老街的传承</h2>
-        <blockquote class="reward-quote">外婆坐在宣纸铺门口，翻着你做的纸和集满的科普卡，眼睛有点红："孩子，宣纸的手艺不是什么秘密，它就是这条老街、这些人、这些年的事。你接过了它，它就能再传一千年。集齐12张科普卡，把老街的故事讲给更多人听吧。"</blockquote>
-        <div class="reward-science">
-          <span class="reward-science-icon">🏆</span>
-          <p><strong>终章：</strong>收集全部12张科普卡。你已经是老街最好的宣纸匠人——但学问永无止境。去非遗馆看看你还差哪几张。</p>
-        </div>
-        <div class="modal-actions">
-          <button class="primary-btn" type="button" data-action="close">继续</button>
-        </div>
-      </section>
-    `;
-  }
-
-  return null;
-}
-
 function storyChapterEvent(label, text) {
   return `
     <section class="story-chapter-banner" aria-labelledby="storyChapterTitle">
@@ -2967,74 +2771,6 @@ function checkStoryProgress() {
     `;
   }
   return null;
-}
-
-function openLegacyMuseum() {
-  const cardsHtml = cardData.map((card) => {
-    const unlocked = state.unlockedCards.has(card.id);
-    return `
-      <article class="science-card ${unlocked ? "unlocked" : "locked"}" aria-label="${unlocked ? card.title : "未解锁科普卡"}">
-        <div class="science-card-icon-wrap">
-          <div class="card-icon ${card.icon}" aria-hidden="true"></div>
-          ${unlocked ? `<span class="science-card-unlocked-badge" aria-hidden="true">✓</span>` : ""}
-        </div>
-        <div class="science-card-content">
-          <h3>${unlocked ? card.title : "？？？"}</h3>
-          <p>${unlocked ? card.text : "完成对应任务后，这张科普卡会在非遗馆亮起。"}</p>
-        </div>
-        <span class="tag science-card-status">${unlocked ? "已解锁" : "待解锁"}</span>
-      </article>
-    `;
-  }).join("");
-
-  const unlockedCount = cardData.filter((c) => state.unlockedCards.has(c.id)).length;
-
-  // 集市问答知识卡
-  const festivalCards = festivalTasks.map(task => {
-    const done = state.completedFestivalTasks.has(task.id);
-    return `
-      <article class="science-card market-card ${done ? "unlocked" : "locked"}" aria-label="${done ? task.stall : "未解锁集市知识"}">
-        <div class="science-card-icon-wrap">
-          <span class="market-stamp" aria-hidden="true">${done ? "🏷️" : "🔒"}</span>
-        </div>
-        <div class="science-card-content">
-          <h3>${done ? `「${task.stamp}」` : "？？？"}<small> ${task.stall} · ${task.npc}</small></h3>
-          <p>${done ? task.correctText : "前往纸境千年集市，与这位行家交谈并答对问题即可解锁。"}</p>
-        </div>
-        <span class="tag science-card-status">${done ? "已集印" : "待探访"}</span>
-      </article>
-    `;
-  }).join("");
-
-  const festivalDone = festivalTasks.filter(t => state.completedFestivalTasks.has(t.id)).length;
-
-  openModal(`
-    <section class="museum-panel" aria-labelledby="museumTitle">
-      <header class="museum-header">
-        <p class="museum-kicker">非遗馆</p>
-        <h2 id="museumTitle">宣纸科普图鉴</h2>
-        <p>馆里的小展台记录着宣纸的材料、工艺和书写特性。</p>
-        <div class="museum-progress">
-          <span>已解锁 <strong>${unlockedCount}</strong> / ${cardData.length} 张</span>
-          <div class="museum-progress-bar"><div class="museum-progress-fill" style="width:${Math.round(unlockedCount / cardData.length * 100)}%"></div></div>
-        </div>
-      </header>
-      <div class="cards-grid">${cardsHtml}</div>
-
-      <div class="museum-divider"></div>
-      <header class="museum-header museum-header--market">
-        <p class="museum-kicker">纸境千年</p>
-        <h3>集市问答 · 行家金句</h3>
-        <p>在纸境千年集市里与四位行家交谈，答对他们的问题，他们的智慧就会收录于此。</p>
-        <div class="museum-progress">
-          <span>已收集 <strong>${festivalDone}</strong> / ${festivalTasks.length} 条</span>
-          <div class="museum-progress-bar"><div class="museum-progress-fill" style="width:${Math.round(festivalDone / festivalTasks.length * 100)}%"></div></div>
-        </div>
-      </header>
-      <div class="cards-grid">${festivalCards}</div>
-      <div class="modal-actions">${closeBtn("返回地图")}</div>
-    </section>
-  `);
 }
 
 function renderDebugLayer() {
