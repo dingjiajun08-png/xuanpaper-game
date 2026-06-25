@@ -1162,7 +1162,7 @@ function getZoneAtPoint(point) {
 
 function getInteractionPrompt(zone) {
   if (!zone) return "";
-  if (!isMobileInput()) return `按 ${INTERACT_KEY_LABEL} ${zone.prompt}`;
+  if (!isMobileInput()) return `<span class="interaction-key">${INTERACT_KEY_LABEL}</span><span>${zone.prompt}</span>`;
   if (zone.mobilePrompt) return zone.mobilePrompt;
   return zone.prompt;
 }
@@ -1211,7 +1211,8 @@ function updateNpcDialogueBubbles() {
 
 function getNpcInteractionHint(id) {
   const dialogue = MARKET_NPC_DIALOGUES[id];
-  return `按 ${NPC_INTERACT_KEY_LABEL} ${dialogue?.promptLabel || "对话"}`;
+  const actionLabel = dialogue?.promptLabel || "交互 NPC";
+  return `<span class="interaction-key">${NPC_INTERACT_KEY_LABEL}</span><span>${actionLabel}</span>`;
 }
 
 function advanceNpcDialogue(id) {
@@ -1337,12 +1338,12 @@ function updateMap() {
     state.activeZone = getActiveZone();
     const nearbyNpc = updateNpcDialogueBubbles();
     if (nearbyNpc && state.gameState === "playing") {
-      interactionPrompt.textContent = isMobileInput()
+      interactionPrompt.innerHTML = isMobileInput()
         ? `点击${MARKET_NPC_DIALOGUES[nearbyNpc.id]?.name || "NPC"}`
         : getNpcInteractionHint(nearbyNpc.id);
       interactionPrompt.classList.remove("hidden");
     } else if (state.activeZone && state.gameState === "playing") {
-      interactionPrompt.textContent = getInteractionPrompt(state.activeZone);
+      interactionPrompt.innerHTML = getInteractionPrompt(state.activeZone);
       interactionPrompt.classList.remove("hidden");
     } else {
       interactionPrompt.classList.add("hidden");
