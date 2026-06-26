@@ -614,12 +614,12 @@ function answerQuest(questId, option) {
   if (questId === "museum" && paperPageCount() === 7) {
     openModal(`
       <section class="story-finale"><img src="assets/story/ui-paper-codex-panel.png" alt="" onerror="this.onerror=null;this.hidden=true"><p>纸境千年 · 纸页已归位</p><h2>七张纸页，唤醒老街</h2><blockquote>馆长说：‘你带回来的不是答案，是老街重新连起来的证据。’<br><br>外婆轻声道：‘宣纸是一片林、一条水、一双手，也是一代人传给下一代人的记忆。’</blockquote><div class="reward-items"><span>非遗馆展柜全部点亮</span><span>纸页 7 / 7</span></div><button class="primary-btn" type="button" data-action="openPaperPagesCodex">查看完整纸页图鉴</button></section>
-    `, "modal", "story-finale-modal");
+    `, "modal", "story-finale-modal", { replace: true });
     return;
   }
   openModal(`
     <section class="paper-slip-reward-card"><img class="paper-slip-icon" src="${PAPER_PAGES[quest.page].asset}" alt="" onerror="this.onerror=null;this.hidden=true"><p class="paper-slip-kicker">七张纸页 · 老街苏醒</p><h2>纸页归位</h2><h3>${PAPER_PAGES[quest.page].title}</h3><p>${quest.reason}</p><div class="modal-actions"><button class="primary-btn" type="button" data-action="openWorkshop">进入工坊</button><button class="secondary-btn" type="button" data-action="openPaperPagesCodex">查看纸页</button></div></section>
-  `, "modal", "paper-slip-reward-modal");
+  `, "modal", "paper-slip-reward-modal", { replace: true });
 }
 
 function openPaperPagesCodex() {
@@ -913,7 +913,7 @@ function openPaperSlipReward(slipId, afterAction = "close", replaceCurrent = fal
   unlockPaperSlip(slipId);
   const chapterEvent = checkStoryProgress();
   if (chapterEvent) {
-    openModal(chapterEvent, "modal", "story-chapter-modal");
+    openModal(chapterEvent, "modal", "story-chapter-modal", { replace: replaceCurrent });
     return;
   }
   openModal(`
@@ -1922,7 +1922,7 @@ function answerFestivalTask(taskId, option) {
   }
   const chapterEvent = checkStoryProgress();
   if (chapterEvent) {
-    openModal(chapterEvent, "modal", "story-chapter-modal");
+    openModal(chapterEvent, "modal", "story-chapter-modal", { replace: true });
     return;
   }
   openFestivalReward(task, firstCompletion);
@@ -1955,7 +1955,7 @@ function openFestivalReward(task, firstCompletion) {
       ${milestone}
       <button class="festival-primary-btn" type="button" data-action="openPaperFestival">继续逛纸市</button>
     </section>
-  `, "modal", "festival-modal-card festival-reward-card");
+  `, "modal", "festival-modal-card festival-reward-card", { replace: true });
 }
 
 // ========================================
@@ -2215,7 +2215,8 @@ function advanceMiniGame(timestamp = 0) {
     g.pos += g.dir * g.speed;
     if (g.pos >= 100) { g.pos = 100; g.dir = -1; }
     if (g.pos <= 0) { g.pos = 0; g.dir = 1; }
-    if (g.pointer) g.pointer.style.left = `calc(${g.pos}% - 6px)`;
+    const pointer = miniGameCachedEl(g, "pointer", "#pointer");
+    if (pointer) pointer.style.left = `calc(${g.pos}% - 6px)`;
     // 不提示，完成后评价
     const hint3 = miniGameCachedEl(g, "phase3Hint", "#phase3Hint");
     if (hint3) { hint3.innerHTML = ''; hint3.style.color = 'var(--wood)'; }
@@ -2263,7 +2264,6 @@ function stopMiniGame() {
     document.querySelector("#phaseHint").textContent = "第3步 · 抄纸定形";
     document.querySelectorAll(".phase-step")[1].classList.replace("phase-step--active", "phase-step--done");
     document.querySelectorAll(".phase-step")[2].classList.add("phase-step--active");
-    g.pointer = document.querySelector("#pointer");
     showToast("✅ 浓度已调好！准备抄纸。");
     if (!state.unlockedCards.has("吸墨性")) state.unlockedCards.add("吸墨性");
 
@@ -2951,7 +2951,7 @@ function openPaperCodex() {
 function openMuseum() {
   state.storyMilestones.museumVisited = true;
   if (paperPageCount() >= 6 && !state.completedQuests.has("museum")) {
-    openQuest("museum");
+    openQuestOnce("museum");
     return;
   }
   const chapterEvent = checkStoryProgress();
