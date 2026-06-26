@@ -97,6 +97,7 @@ function onPlatformChange(platform) {
 const state = {
   gameState: "start",
   introActive: true,
+  flags: {},               // 轻量开关：apprenticeProcessCleared 等
   coins: 0,
   reputation: 0,
   upgrades: { bambooMat: false, pulpRecipe: false, workbench: false, barkStorage: false },
@@ -526,6 +527,9 @@ const reputationText = document.querySelector("#reputationText");
 const taskSteps = document.querySelector("#taskSteps");
 const paperPagesButton = document.querySelector("#paperPagesButton");
 
+// NPC 对话气泡 DOM 缓存，applyMapLayout 时重置
+let _npcDialogueCache = null;
+
 function paperPageCount() {
   return Object.values(state.paperPages).filter(Boolean).length;
 }
@@ -538,6 +542,30 @@ function completeQuest(questId) {
   state.coins += 15;
   updateHud();
   showToast(`纸页归位：${PAPER_PAGES[quest.page].title}`);
+  // 完成"帮学徒理清工序"后解锁工坊小游戏
+  if (questId === "workshopProcess") {
+    state.flags.apprenticeProcessCleared = true;
+    showToast("工序理清了，可以开始浸泡原料了。");
+  }
+  return true;
+}
+
+function isApprenticeProcessCleared() {
+  return state.flags?.apprenticeProcessCleared === true
+    || state.completedQuests?.has?.("workshopProcess") === true;
+}
+
+function requireApprenticeProcessCleared() {
+  if (!state.flags) state.flags = {};
+  // 兼容旧存档：如果 completedQuests 中已记录但 flags 未同步，自动补标
+  if (state.completedQuests?.has?.("workshopProcess")) {
+    state.flags.apprenticeProcessCleared = true;
+    return true;
+  }
+  if (!isApprenticeProcessCleared()) {
+    showToast("先帮学徒理清工序，才能开始制纸。");
+    return false;
+  }
   return true;
 }
 
@@ -564,6 +592,16 @@ function openQuest(questId, feedback = "") {
   `, "modal", "story-choice-modal");
 }
 
+function openQuestOnce(questId, completedMessage = "这个任务已经完成了。") {
+  if (!questId) return false;
+  if (state.completedQuests?.has?.(questId)) {
+    showToast(completedMessage);
+    return true;
+  }
+  openQuest(questId);
+  return true;
+}
+
 function answerQuest(questId, option) {
   const quest = quests[questId];
   if (!quest) return;
@@ -580,7 +618,7 @@ function answerQuest(questId, option) {
     return;
   }
   openModal(`
-    <section class="paper-slip-reward-card"><img class="paper-slip-icon" src="${PAPER_PAGES[quest.page].asset}" alt="" onerror="this.onerror=null;this.hidden=true"><p class="paper-slip-kicker">七张纸页 · 老街苏醒</p><h2>纸页归位</h2><h3>${PAPER_PAGES[quest.page].title}</h3><p>${quest.reason}</p><div class="modal-actions"><button class="primary-btn" type="button" data-action="close">收进图鉴</button><button class="secondary-btn" type="button" data-action="openPaperPagesCodex">查看纸页</button></div></section>
+    <section class="paper-slip-reward-card"><img class="paper-slip-icon" src="${PAPER_PAGES[quest.page].asset}" alt="" onerror="this.onerror=null;this.hidden=true"><p class="paper-slip-kicker">七张纸页 · 老街苏醒</p><h2>纸页归位</h2><h3>${PAPER_PAGES[quest.page].title}</h3><p>${quest.reason}</p><div class="modal-actions"><button class="primary-btn" type="button" data-action="openWorkshop">进入工坊</button><button class="secondary-btn" type="button" data-action="openPaperPagesCodex">查看纸页</button></div></section>
   `, "modal", "paper-slip-reward-modal");
 }
 
@@ -1039,6 +1077,7 @@ function applyMapLayout(preservePlayer = true) {
     streetForeground.style.width = `${state.map.width}px`;
     streetForeground.style.height = `${state.map.height}px`;
   }
+  _npcDialogueCache = null;
   state.map.ready = true;
   updateCamera();
 }
@@ -1188,7 +1227,10 @@ function getNearbyNpcDialogue() {
 function updateNpcDialogueBubbles() {
   const nearby = getNearbyNpcDialogue();
   state.nearbyNpcDialogueId = nearby?.id || null;
-  document.querySelectorAll("[data-npc-dialogue]").forEach((npc) => {
+  if (!_npcDialogueCache) {
+    _npcDialogueCache = Array.from(document.querySelectorAll("[data-npc-dialogue]"));
+  }
+  _npcDialogueCache.forEach((npc) => {
     const id = npc.dataset.npcDialogue;
     const dialogue = MARKET_NPC_DIALOGUES[id];
     const bubble = npc.querySelector(".npc-dialogue-bubble");
@@ -1225,16 +1267,13 @@ function advanceNpcDialogue(id) {
   const dialogue = MARKET_NPC_DIALOGUES[id];
   if (!dialogue) return false;
   if (id === "marketVisitor") {
-    openQuest("marketTourist");
-    return true;
+    return openQuestOnce("marketTourist", "这页纸背后的价值已经讲清了。");
   }
   if (id === "paperSeller" || id === "craftsperson") {
-    openQuest("marketPainter");
-    return true;
+    return openQuestOnce("marketPainter", "纸性已经认清了。");
   }
   if (id === "forestElder") {
-    openQuest("forest");
-    return true;
+    return openQuestOnce("forest", "青檀原料已经了解了。");
   }
   if (id === "workshopMaster") {
     if (state.storyChapter === 1) {
@@ -1248,15 +1287,14 @@ function advanceNpcDialogue(id) {
         return true;
       }
     }
-    openQuest("workshopProcess");
-    return true;
+
+    return openQuestOnce("workshopProcess", "工序已经理清了，去工坊开始制纸吧。");
   }
   if (id === "dryingElder") {
-    openQuest("dryingYard");
-    return true;
+    return openQuestOnce("dryingYard", "晒纸要点已经记住了。");
   }
   if (id === "galleryCurator") {
-    if (paperPageCount() >= 6) openQuest("museum");
+    if (paperPageCount() >= 6) openQuestOnce("museum", "这页图鉴已经收好了。");
     else openPaperPagesCodex();
     return true;
   }
@@ -1296,11 +1334,14 @@ function openNpcStoryDialogue(id) {
     1: ["宣屿，这间铺子不是缺纸，是缺一个真正懂纸的人。", "先认纸性。写行草的人，要墨气活；画工笔的人，要线条稳。你先从生宣、熟宣、半熟宣认起。"],
     2: ["光会卖纸还不够。纸有骨肉：青檀是骨，稻草是肌。", "去山里和水车旁看看，知道它们从哪里来，才知道一张纸为什么不一样。"],
     3: ["手艺不是步骤表。每一帘、每一晒，都要靠人的经验。", "这次不是比快，是比稳。纸浆在竹帘上分布匀，纸面才站得住。"],
-    4: ["纸做出来，是要去到人手里的。有人写，有人画，有人珍藏，纸才算真正活过。", "等十二张纸谱都回来，去非遗馆看看这条老街留下了什么。"]
-  }[state.storyChapter] || dialogue.storyLines;
+    4: ["纸做出来，是要去到人手里的。有人写，有人画，有人珍藏，纸才算真正活过。", "等十二张纸谱都回来，去非遗馆看看这条老街留下了什么。"],
+    // 兜底：章节超出 1-4 时使用最终章对话，避免回退到初始 storyLines
+    _fallback: ["老街已经重新热闹起来了。每一张纸，都有它的去处。", "十二张纸谱归位，非遗馆也重新开馆了。这条老街的故事，还在继续。"]
+  };
+  const lines = chapterLines[state.storyChapter] || chapterLines._fallback;
   state.storyMilestones.grandmaTalked = true;
   updateStoryTask();
-  const paragraphs = chapterLines.map((line) => `<p>${line}</p>`).join("");
+  const paragraphs = lines.map((line) => `<p>${line}</p>`).join("");
   openModal(`
     <section class="grandmother-dialogue" aria-labelledby="grandmotherDialogueTitle">
       <div class="grandmother-dialogue-portrait" aria-hidden="true"></div>
@@ -1364,29 +1405,33 @@ function updateMap() {
 
 
 function gameLoop(timestamp = 0) {
-  if (state.gameState === "playing") {
-    let inputX = 0;
-    let inputY = 0;
-    if (state.keys.has("ArrowLeft") || state.keys.has("KeyA")) inputX -= 1;
-    if (state.keys.has("ArrowRight") || state.keys.has("KeyD")) inputX += 1;
-    if (state.keys.has("ArrowUp") || state.keys.has("KeyW")) inputY -= 1;
-    if (state.keys.has("ArrowDown") || state.keys.has("KeyS")) inputY += 1;
+  try {
+    if (state.gameState === "playing") {
+      let inputX = 0;
+      let inputY = 0;
+      if (state.keys.has("ArrowLeft") || state.keys.has("KeyA")) inputX -= 1;
+      if (state.keys.has("ArrowRight") || state.keys.has("KeyD")) inputX += 1;
+      if (state.keys.has("ArrowUp") || state.keys.has("KeyW")) inputY -= 1;
+      if (state.keys.has("ArrowDown") || state.keys.has("KeyS")) inputY += 1;
 
-    if (inputX || inputY) {
-      const length = Math.hypot(inputX, inputY);
-      tryMove((inputX / length) * state.player.speed, (inputY / length) * state.player.speed);
-    } else if (joystickVector.x || joystickVector.y) {
-      inputX = joystickVector.x;
-      inputY = joystickVector.y;
-      tryMove(inputX * state.player.speed, inputY * state.player.speed);
+      if (inputX || inputY) {
+        const length = Math.hypot(inputX, inputY);
+        tryMove((inputX / length) * state.player.speed, (inputY / length) * state.player.speed);
+      } else if (joystickVector.x || joystickVector.y) {
+        inputX = joystickVector.x;
+        inputY = joystickVector.y;
+        tryMove(inputX * state.player.speed, inputY * state.player.speed);
+      }
+      updatePlayerAnimation(inputX, inputY, timestamp);
+      updateMap();
+    } else {
+      setPlayerSprite(state.player.direction, 0);
     }
-    updatePlayerAnimation(inputX, inputY, timestamp);
-    updateMap();
-  } else {
-    setPlayerSprite(state.player.direction, 0);
-  }
 
-  if (state.miniGame?.running) advanceMiniGame();
+    if (state.miniGame?.running) advanceMiniGame(timestamp);
+  } catch (e) {
+    console.error("gameLoop error:", e);
+  }
   requestAnimationFrame(gameLoop);
 }
 
@@ -1414,8 +1459,8 @@ function activateZone(zone) {
   else if (zone.id === "workshop") openWorkshop();
   else if (zone.id === "calligraphyShop") openOrderBoard();
   else if (zone.id === "museum") openMuseum();
-  else if (zone.id === "qingtanForest" || zone.id === "qingtanForestTrail") openQuest("forest");
-  else if (zone.id === "waterWheel") openQuest("waterwheel");
+  else if (zone.id === "qingtanForest" || zone.id === "qingtanForestTrail") openQuestOnce("forest", "青檀原料已经了解了。");
+  else if (zone.id === "waterWheel") openQuestOnce("waterwheel", "水车和纸浆要点已经记住了。");
   else if (zone.id === "paperFestival") openPaperFestival();
   else if (zone.id === "dryingYard" || zone.id.startsWith("dryingRacks")) openDryingYard();
   else openComingSoon(zone);
@@ -1919,6 +1964,30 @@ function openFestivalReward(task, firstCompletion) {
 // 每个阶段都有科普知识注入
 // ========================================
 
+function openApprenticeOnlyWorkshop() {
+  // 工序题未完成时，工坊只显示任务面板，不启动小游戏
+  openModal(`
+    <section class="workshop-panel" aria-labelledby="workshopTitle">
+      <header class="workshop-header">
+        <span class="workshop-icon" aria-hidden="true"></span>
+        <div>
+          <p class="workshop-kicker">宣纸工坊</p>
+          <h2 id="workshopTitle">三阶段制纸</h2>
+          <span class="workshop-phase-hint">⚠️ 尚未通过工序考核</span>
+        </div>
+      </header>
+      <p class="workshop-story-note">学徒小徐还分不清制纸的顺序。你如果不先帮他理清工序，原料就可能浪费——先帮他，再动手。</p>
+      <div class="workshop-science-tip">💡 宣纸制作的传统顺序：皮料加工 → 草料加工 → 制浆 → 捞纸 → 晒纸 → 剪纸</div>
+      ${state.completedQuests.has("workshopProcess")
+        ? `<p class="workshop-science-tip">💡 工序已经理清。现在可以开始浸泡原料、浓度调配和抄纸了。</p>`
+        : `<button class="primary-btn workshop-story-button" type="button" data-action="openQuest" data-quest-id="workshopProcess">先帮学徒理清工序</button>`}
+      <div class="modal-actions">
+        <button class="danger-btn" type="button" data-action="close">离开工坊</button>
+      </div>
+    </section>
+  `);
+}
+
 function openWorkshop() {
   if (state.storyChapter === 1) {
     const step = getChapterOneStep();
@@ -1930,6 +1999,11 @@ function openWorkshop() {
       openModal(`<section class="story-choice-card"><p class="story-choice-kicker">纸境千年 · 工坊提醒</p><h2>先懂纸性</h2><blockquote>纸还没认清就急着做？宣纸不是只看手快，要先懂纸性。先去宣纸铺看看生宣、熟宣、半熟宣吧。</blockquote>${closeBtn("去宣纸铺")}</section>`, "modal", "story-choice-modal");
       return;
     }
+  }
+  // 工序题未完成：只显示任务面板，不启动制纸小游戏
+  if (!isApprenticeProcessCleared()) {
+    openApprenticeOnlyWorkshop();
+    return;
   }
   if (state.miniGame) state.miniGame.running = false;
   state.miniGame = null;
@@ -2076,18 +2150,32 @@ function openWorkshop() {
   }
 }
 
-function advanceMiniGame() {
+function miniGameCachedEl(g, key, selector) {
+  if (!g._cachedEls) g._cachedEls = {};
+  let el = g._cachedEls[key];
+  // 缓存失效：不存在、已从 DOM 移除、或被替换
+  if (!el || !el.isConnected) {
+    el = document.querySelector(selector);
+    g._cachedEls[key] = el || null;
+  }
+  return el;
+}
+
+function advanceMiniGame(timestamp = 0) {
   const g = state.miniGame;
   if (!g?.running) return;
+
+  // 用真实时间差替代硬编码帧率假设
+  const deltaMs = g._lastTimestamp ? timestamp - g._lastTimestamp : 16;
+  g._lastTimestamp = timestamp;
 
   if (g.phase === "drying") {
     // 晒纸场：晾晒进度条
     g.dryProgress += 0.4 * g.dryDir;
     if (g.dryProgress >= 100) g.dryDir = -1;
     else if (g.dryProgress <= 0) g.dryDir = 1;
-    const bar = document.querySelector("#dryBar");
-    const hint = document.querySelector("#dryHint");
-    const zone = g.weather.zone;
+    const bar = miniGameCachedEl(g, "dryBar", "#dryBar");
+    const hint = miniGameCachedEl(g, "dryHint", "#dryHint");
     if (bar) bar.style.width = `${g.dryProgress}%`;
     // 晾晒过程中不提示，完成后评价
   } else if (g.phase === 1) {
@@ -2095,8 +2183,8 @@ function advanceMiniGame() {
     g.soakProgress += 0.5 * g.soakDir;
     if (g.soakProgress >= 100) g.soakDir = -1;
     else if (g.soakProgress <= 0) g.soakDir = 1;
-    const bar = document.querySelector("#soakBar");
-    const hint = document.querySelector("#phase1Hint");
+    const bar = miniGameCachedEl(g, "soakBar", "#soakBar");
+    const hint = miniGameCachedEl(g, "phase1Hint", "#phase1Hint");
     if (bar) bar.style.width = `${g.soakProgress}%`;
     if (hint) { hint.innerHTML = ''; hint.style.color = 'var(--wood)'; }
   } else if (g.phase === 2) {
@@ -2108,15 +2196,15 @@ function advanceMiniGame() {
     if (g.concBar2 >= 100) { g.concBar2 = 100; g.concBar2Dir = -1; }
     if (g.concBar2 <= 0) { g.concBar2 = 0; g.concBar2Dir = 1; }
 
-    const p1 = document.querySelector("#concPointer1");
-    const p2 = document.querySelector("#concPointer2");
-    const hint = document.querySelector("#phase2Hint");
+    const p1 = miniGameCachedEl(g, "concPointer1", "#concPointer1");
+    const p2 = miniGameCachedEl(g, "concPointer2", "#concPointer2");
+    const hint = miniGameCachedEl(g, "phase2Hint", "#phase2Hint");
     if (p1) p1.style.left = `calc(${g.concBar1}% - 6px)`;
     if (p2) p2.style.left = `calc(${g.concBar2}% - 6px)`;
 
     const bothInZone = g.concBar1 >= 60 && g.concBar1 <= 80 && g.concBar2 >= 60 && g.concBar2 <= 80;
     if (bothInZone) {
-      g.concStableTime += 16;
+      g.concStableTime += deltaMs;
     } else {
       g.concStableTime = 0;
     }
@@ -2129,13 +2217,15 @@ function advanceMiniGame() {
     if (g.pos <= 0) { g.pos = 0; g.dir = 1; }
     if (g.pointer) g.pointer.style.left = `calc(${g.pos}% - 6px)`;
     // 不提示，完成后评价
-    const hint3 = document.querySelector("#phase3Hint");
+    const hint3 = miniGameCachedEl(g, "phase3Hint", "#phase3Hint");
     if (hint3) { hint3.innerHTML = ''; hint3.style.color = 'var(--wood)'; }
   }
 }
 
 function stopMiniGame() {
   if (!state.miniGame?.running) return;
+  // 工序题未完成时禁止进入小游戏（深度防卫，按钮已被隐藏但仍加一道锁）
+  if (!requireApprenticeProcessCleared()) return;
   const g = state.miniGame;
 
   if (g.phase === "drying") return dryPaper();
@@ -2174,7 +2264,6 @@ function stopMiniGame() {
     document.querySelectorAll(".phase-step")[1].classList.replace("phase-step--active", "phase-step--done");
     document.querySelectorAll(".phase-step")[2].classList.add("phase-step--active");
     g.pointer = document.querySelector("#pointer");
-    if (!g.pointer) g.pointer = document.querySelector("#pointer");
     showToast("✅ 浓度已调好！准备抄纸。");
     if (!state.unlockedCards.has("吸墨性")) state.unlockedCards.add("吸墨性");
 
@@ -2489,6 +2578,10 @@ function dryPaper() {
 // 工坊升级购买
 // ========================================
 function buyUpgrade(upgradeId) {
+  if (state.miniGame?.running) {
+    showToast("请先完成当前制纸，再升级工坊。");
+    return;
+  }
   const def = UPGRADES[upgradeId];
   if (!def || state.upgrades[upgradeId]) return;
   if (state.coins < def.cost) {
@@ -2512,16 +2605,23 @@ function buyFestivalItem(itemId) {
   const item = items[itemId];
   if (!item || (state.paperCoins || 0) < item.cost) return;
 
+  const locked = itemId === "craftsmanNote"
+    ? legacyKnowledgeCardIds.filter((id) => !state.unlockedCards.has(id))
+    : [];
+  if (itemId === "craftsmanNote" && locked.length === 0) {
+    showToast("科普卡已全部解锁");
+    return;
+  }
+
   state.paperCoins -= item.cost;
   if (itemId === "luckyCharm") state.festivalBuffs.luckyCharm += 1;
   if (itemId === "bambooOil") state.festivalBuffs.bambooOil += 5;
   if (itemId === "craftsmanNote") {
-    const locked = legacyKnowledgeCardIds.filter((id) => !state.unlockedCards.has(id));
-    if (locked.length > 0) state.unlockedCards.add(locked[Math.floor(Math.random() * locked.length)]);
+    state.unlockedCards.add(locked[Math.floor(Math.random() * locked.length)]);
   }
   updateHud();
   showToast(`🪙 ${item.msg}`);
-  openWorkshop();
+  openFestivalExchange();
 }
 
 // ========================================
@@ -2539,6 +2639,7 @@ function generateOrder(excludeNpcs = []) {
     return state.reputation >= o.unlockRep;
   });
   const order = JSON.parse(JSON.stringify(pool[Math.floor(Math.random() * pool.length)]));
+  order.baseId = order.id;
   order.id = order.id + "_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
   return order;
 }
@@ -2549,6 +2650,7 @@ function openOrderBoard() {
     const usedNpcs = [];
     if (state.storyChapter === 1 && state.ordersCompleted === 0) {
       const introOrder = JSON.parse(JSON.stringify(ORDER_TYPES.find((order) => order.id === "calligraphyMaster")));
+      introOrder.baseId = introOrder.id;
       introOrder.id = `${introOrder.id}_${Date.now()}_intro`;
       state.orderQueue.push(introOrder);
       usedNpcs.push(introOrder.npc);
@@ -2563,7 +2665,8 @@ function openOrderBoard() {
     const canDeliver = state.lastPaper && checkOrderRequirements(order, state.lastPaper.stats);
     const judged = state.orderJudgments.has(order.id);
     const locked = order.unlockRep && state.reputation < order.unlockRep;
-    const typeClass = order.id.includes("timed") ? "order-type--timed" : order.id.includes("premium") || order.unlockRep >= 25 ? "order-type--premium" : "";
+    const baseId = getOrderBaseId(order);
+    const typeClass = baseId.includes("timed") ? "order-type--timed" : baseId.includes("premium") || order.unlockRep >= 25 ? "order-type--premium" : "";
     return `
       <div class="order-card ${locked ? "order-locked" : ""}">
         <div class="order-header">
@@ -2619,19 +2722,30 @@ function checkOrderRequirements(order, stats) {
   return Object.entries(order.requirements).every(([key, val]) => (stats[key] || 0) >= val);
 }
 
+function getOrderBaseId(order) {
+  if (!order) return "";
+  if (order.baseId) return order.baseId;
+  if (typeof order.id === "string") return order.id.split("_")[0];
+  return "";
+}
+
+const ORDER_SLIP_MAP = {
+  "calligraphyMaster": "ink-door",
+  "masterLi": "half-cooked",
+  "premiumCourt": "glue-alum",
+  "mountMaster": "millennium"
+};
+
 function getOrderSlipId(order) {
-  if (order.id.startsWith("calligraphyMaster")) return "ink-door";
-  if (order.id.startsWith("masterLi")) return "half-cooked";
-  if (order.id.startsWith("premiumCourt")) return "glue-alum";
-  if (order.id.startsWith("mountMaster")) return "millennium";
-  return null;
+  return ORDER_SLIP_MAP[getOrderBaseId(order)] || null;
 }
 
 function tryUnlockWaxSlipFromOrder(order) {
+  const baseId = getOrderBaseId(order);
   if (
     state.storyChapter >= 2 &&
     order &&
-    (order.id === "collectorChen" || order.id === "premiumCourt") &&
+    (baseId === "collectorChen" || baseId === "premiumCourt") &&
     !state.unlockedKnowledgeCards.has("wax")
   ) {
     unlockPaperSlip("wax");
@@ -2849,36 +2963,39 @@ function openMuseum() {
 }
 
 function handleAction(action, dataset = {}) {
-  if (action === "close") closeModal();
-  if (action === "retryWorkshop") openWorkshop();
-  if (action === "stopMiniGame" || action === "advancePhase") stopMiniGame();
-  if (action === "openPaperShop") openPaperShop();
-  if (action === "openPaperCodex") openPaperCodex();
-  if (action === "openPaperPagesCodex") openPaperPagesCodex();
-  if (action === "openQuest") openQuest(dataset.questId);
-  if (action === "answerQuest") answerQuest(dataset.questId, dataset.option);
-  if (action === "openStoryChoice") openStoryChoice(dataset.caseId);
-  if (action === "answerStoryChoice") answerStoryChoice(dataset.slipId, dataset.option);
-  if (action === "switchPaperType") openPaperShop(dataset.paperId);
-  if (action === "enterFestival" || action === "openPaperFestival") openPaperFestival();
-  if (action === "openFestivalTask") openFestivalTask(dataset.taskId);
-  if (action === "answerFestivalTask") answerFestivalTask(dataset.taskId, dataset.option);
-  if (action === "buyUpgrade") buyUpgrade(dataset.upgradeId);
-  if (action === "buyFestivalItem") buyFestivalItem(dataset.itemId);
-  if (action === "openFestivalExchange") openFestivalExchange();
-  if (action === "openOrderBoard") openOrderBoard();
-  if (action === "openOrderPaperChoice") openOrderPaperChoice(dataset.orderId);
-  if (action === "answerOrderPaperChoice") answerOrderPaperChoice(dataset.orderId, dataset.paperType);
-  if (action === "acceptOrder") acceptOrder(dataset.orderId);
-  if (action === "refreshOrders") refreshOrders();
-  if (action === "openDryingYard") openDryingYard();
-  if (action === "dryPaper") dryPaper();
-  if (action === "refreshDryingWeather") openDryingYard();
+  if (action === "close") { closeModal(); return; }
+  if (action === "retryWorkshop") { openWorkshop(); return; }
+  if (action === "stopMiniGame" || action === "advancePhase") { stopMiniGame(); return; }
+  if (action === "openWorkshop") { openWorkshop(); return; }
+  if (action === "openPaperShop") { openPaperShop(); return; }
+  if (action === "openPaperCodex") { openPaperCodex(); return; }
+  if (action === "openPaperPagesCodex") { openPaperPagesCodex(); return; }
+  if (action === "openQuest") { openQuestOnce(dataset.questId); return; }
+  if (action === "answerQuest") { answerQuest(dataset.questId, dataset.option); return; }
+  if (action === "openStoryChoice") { openStoryChoice(dataset.caseId); return; }
+  if (action === "answerStoryChoice") { answerStoryChoice(dataset.slipId, dataset.option); return; }
+  if (action === "switchPaperType") { openPaperShop(dataset.paperId); return; }
+  if (action === "enterFestival" || action === "openPaperFestival") { openPaperFestival(); return; }
+  if (action === "openFestivalTask") { openFestivalTask(dataset.taskId); return; }
+  if (action === "answerFestivalTask") { answerFestivalTask(dataset.taskId, dataset.option); return; }
+  if (action === "buyUpgrade") { buyUpgrade(dataset.upgradeId); return; }
+  if (action === "buyFestivalItem") { buyFestivalItem(dataset.itemId); return; }
+  if (action === "openFestivalExchange") { openFestivalExchange(); return; }
+  if (action === "openOrderBoard") { openOrderBoard(); return; }
+  if (action === "openOrderPaperChoice") { openOrderPaperChoice(dataset.orderId); return; }
+  if (action === "answerOrderPaperChoice") { answerOrderPaperChoice(dataset.orderId, dataset.paperType); return; }
+  if (action === "acceptOrder") { acceptOrder(dataset.orderId); return; }
+  if (action === "refreshOrders") { refreshOrders(); return; }
+  if (action === "openDryingYard") { openDryingYard(); return; }
+  if (action === "dryPaper") { dryPaper(); return; }
+  if (action === "refreshDryingWeather") { openDryingYard(); return; }
+  console.warn("handleAction: unknown action:", action, dataset);
 }
 
 function handlePauseAction(action) {
-  if (action === "resume") closePauseMenu();
-  if (action === "returnStart") returnToStartScreen();
+  if (action === "resume") { closePauseMenu(); return; }
+  if (action === "returnStart") { returnToStartScreen(); return; }
+  console.warn("handlePauseAction: unknown action:", action);
 }
 
 introScreen.addEventListener("click", startGame);
@@ -3083,3 +3200,26 @@ updateHud();
 detectPlatform();       // 初始化时判定平台
 resizeCamera();          // 触发一次地图布局
 requestAnimationFrame(gameLoop);
+
+// ========================================
+// 全局错误处理：避免 gameLoop 之外的异常静默丢失
+// ========================================
+var _lastErrorToastTime = 0;
+function _showErrorToast(msg) {
+  var now = Date.now();
+  if (now - _lastErrorToastTime < 3000) return; // 3秒内不重复
+  _lastErrorToastTime = now;
+  try { showToast(msg); } catch (_) { /* ignore */ }
+}
+
+window.onerror = function (msg, source, lineno, colno, error) {
+  console.error("全局错误:", { msg: msg, source: source, lineno: lineno, colno: colno, error: error });
+  _showErrorToast("游戏出现异常，请刷新页面或查看控制台（F12）");
+  return true;
+};
+
+window.onunhandledrejection = function (event) {
+  console.error("未捕获的 Promise 拒绝:", event.reason);
+  _showErrorToast("游戏出现异常，请刷新页面或查看控制台（F12）");
+  event.preventDefault();
+};
