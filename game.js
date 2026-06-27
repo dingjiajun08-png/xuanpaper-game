@@ -530,6 +530,8 @@ const SHUHUA_ORDERS = Object.freeze([
     perfectFeedback: "字迹端正清晰，墨色稳稳停在纸面上，整张答卷显得干净可靠。",
     acceptableFeedback: "字迹基本清楚，只是少数转折处略有毛边，赶考使用还算稳妥。",
     wrongFeedback: "墨迹向外扩散，细字边缘糊开，答卷显得不够工整。",
+    scienceTip: "宣纸的均匀度取决于抄纸时纸浆在竹帘上的分布是否均匀。造纸工匠全凭手腕控制竹帘入水的角度和力度，让纤维在帘面上交错重叠，形成厚薄一致的纸胎。",
+    customerDialogue: `赶考书生抱着卷轴说：我要连夜誊写文章，纸面要平整，字迹要清楚，不能一写就糊。`,
     reward: { perfectCoins: 8, acceptableCoins: 5, wrongCoins: 2 }
   },
   {
@@ -546,6 +548,8 @@ const SHUHUA_ORDERS = Object.freeze([
     perfectFeedback: "墨色由浓到淡自然铺开，远山像被雾气轻轻罩住。",
     acceptableFeedback: "山色有层次，但晕染不够松动，雾气显得稍紧。",
     wrongFeedback: "墨停在纸面上，远山层次打不开，云雾少了流动感。",
+    scienceTip: "生宣未经过胶矾加工，保留了原纸较强的吸水性和渗化性。青檀皮纤维较长，带来韧性与拉力；稻草纤维较短，帮助形成均匀细密的纸面。",
+    customerDialogue: `王大爷捻着笔说：我这幅山水要看见墨色化开的气韵，纸要能吃墨，也要撑得住笔力。`,
     reward: { perfectCoins: 8, acceptableCoins: 5, wrongCoins: 2 }
   },
   {
@@ -594,6 +598,8 @@ const SHUHUA_ORDERS = Object.freeze([
     perfectFeedback: "花鸟线条清稳，颜色停在该停的位置，层层设色也不乱。",
     acceptableFeedback: "大体能控制住，少数花瓣边缘还有轻微晕开。",
     wrongFeedback: "颜色顺着纸纹跑开，花瓣和羽毛的细节被墨色吞掉了。",
+    scienceTip: "熟宣是在生宣基础上经过胶矾加工而成。胶质在纸面和纤维之间形成阻隔，使水墨不易渗入；矾帮助固定胶料，让纸面的渗化性大大降低。尤其适合工笔画的精细勾线和反复设色。",
+    customerDialogue: `宫廷画师轻声提醒：花鸟线条要细，颜色要层层罩染，纸面不能一落墨就洇开。`,
     reward: { perfectCoins: 8, acceptableCoins: 5, wrongCoins: 2 }
   },
   {
@@ -610,6 +616,8 @@ const SHUHUA_ORDERS = Object.freeze([
     perfectFeedback: "竹叶墨气淋漓，石面浓淡相生，水墨层次自然长出来。",
     acceptableFeedback: "有些墨韵，但扩散不够酣畅，竹石的气势稍弱。",
     wrongFeedback: "墨色被锁在笔画里，泼墨变成了描边，少了写意的畅快。",
+    scienceTip: "墨在宣纸上跑的过程，本质是液体在毛细管中的渗吸现象。生宣纤维间的微小孔隙形成天然墨道，墨汁沿纤维方向扩散，产生浓淡、干湿、虚实的丰富变化——这就是墨韵。",
+    customerDialogue: `流浪诗人柳生笑着说：画竹要一笔见气，墨色能散开，才有风过竹林的味道。`,
     reward: { perfectCoins: 8, acceptableCoins: 5, wrongCoins: 2 }
   },
   {
@@ -626,6 +634,8 @@ const SHUHUA_ORDERS = Object.freeze([
     perfectFeedback: "每个笔画都清清楚楚，学生照着临摹时能看见用笔方向。",
     acceptableFeedback: "大字还清楚，小笔画的边缘略有松动。",
     wrongFeedback: "笔画边缘洇散，孩子们难以分辨准确的字形结构。",
+    scienceTip: "宣纸的洁白度并非越白越好。传统宣纸呈自然的象牙白色，是因为原料未经过强漂白处理，保留了纤维本来的色泽。这种自然白度不刺眼，墨色落上去更柔和。",
+    customerDialogue: `私塾先生指着字帖说：给学生临摹的纸，不能太花，也不能太洇，要让每一笔都看得清。`,
     reward: { perfectCoins: 8, acceptableCoins: 5, wrongCoins: 2 }
   },
   {
@@ -642,6 +652,8 @@ const SHUHUA_ORDERS = Object.freeze([
     perfectFeedback: "两张纸韧性足，托裱时边角稳定，旧画终于能重新展开。",
     acceptableFeedback: "纸张基本能用，只是局部湿润后还需要师傅多压一压。",
     wrongFeedback: "纸性太散，遇水后边缘容易变形，托裱旧画不够稳妥。",
+    scienceTip: "装裱是中国书画特有的保护工艺，用宣纸、绫绢等材料对原画进行托裱、覆背。宣纸之所以适合装裱，是因为其纤维弹性好、干湿收缩率小，能随画心一起呼吸，不易变形开裂。",
+    customerDialogue: `装裱匠人张叔说：修旧画最怕纸性不稳，托裱用纸要柔韧、服帖，还要经得起岁月。`,
     reward: { perfectCoins: 8, acceptableCoins: 5, wrongCoins: 2 }
   },
   {
@@ -890,11 +902,40 @@ function getQuestReward(questId) {
   return { coins: 10, reputation: 5, reason: "完成老街委托。" };
 }
 
+function syncStoryMilestonesFromQuestProgress() {
+  if (!state.storyMilestones.qingtanVisited) {
+    if (state.completedQuests.has("forest") || state.paperPages.qingtan) {
+      state.storyMilestones.qingtanVisited = true;
+    }
+  }
+  if (!state.storyMilestones.riceVisited) {
+    if (state.completedQuests.has("waterwheel") || state.paperPages.water) {
+      state.storyMilestones.riceVisited = true;
+    }
+  }
+  if ((state.completedQuests.has("forest") || state.paperPages.qingtan) && !state.unlockedKnowledgeCards.has("qingtan-bark")) {
+    state.unlockedKnowledgeCards.add("qingtan-bark");
+    state.unlockedCards.add("青檀树皮");
+  }
+  if ((state.completedQuests.has("waterwheel") || state.paperPages.water) && !state.unlockedKnowledgeCards.has("rice-straw")) {
+    state.unlockedKnowledgeCards.add("rice-straw");
+    state.unlockedCards.add("沙田稻草");
+  }
+  if (state.completedFestivalTasks.has("small-regular-script") && !state.unlockedKnowledgeCards.has("wax")) {
+    state.unlockedKnowledgeCards.add("wax");
+    state.unlockedCards.add("生宣与熟宣");
+  }
+}
+
 function completeQuest(questId) {
   const quest = quests[questId];
   if (!quest || state.completedQuests.has(questId)) return false;
   state.completedQuests.add(questId);
   state.paperPages[quest.page] = true;
+  if (questId === "forest") state.storyMilestones.qingtanVisited = true;
+  if (questId === "waterwheel") state.storyMilestones.riceVisited = true;
+  if (questId === "forest") unlockPaperSlip("qingtan-bark");
+  if (questId === "waterwheel") unlockPaperSlip("rice-straw");
   const reward = getQuestReward(questId);
   addCoins(reward.coins, reward.reason);
   addReputation(reward.reputation, "老街的人开始记住宣屿了。");
@@ -924,6 +965,13 @@ function requireApprenticeProcessCleared() {
     return false;
   }
   return true;
+}
+
+function cleanQuizStackEntries() {
+  state.pageStack = state.pageStack.filter((entry) => {
+    const name = entry.pageName || "";
+    return !name.endsWith("questTitle") && !name.endsWith("storyChoiceTitle") && !name.endsWith("festivalTaskTitle");
+  });
 }
 
 function openQuest(questId, feedback = "") {
@@ -968,6 +1016,7 @@ function answerQuest(questId, option) {
   }
   const firstCompletion = completeQuest(questId);
   if (!firstCompletion) return openQuest(questId);
+  cleanQuizStackEntries();
   if (questId === "museum" && paperPageCount() === 7) {
     openModal(`
       <section class="story-finale"><img src="assets/story/ui-paper-codex-panel.png" alt="" onerror="this.onerror=null;this.hidden=true"><p>纸境千年 · 纸页已归位</p><h2>七张纸页，唤醒老街</h2><blockquote>馆长说：‘你带回来的不是答案，是老街重新连起来的证据。’<br><br>外婆轻声道：‘宣纸是一片林、一条水、一双手，也是一代人传给下一代人的记忆。’</blockquote><div class="reward-items"><span>非遗馆展柜全部点亮</span><span>纸页 7 / 7</span></div><button class="primary-btn" type="button" data-action="openPaperPagesCodex">查看完整纸页图鉴</button></section>
@@ -1326,6 +1375,7 @@ function answerStoryChoice(slipId, option) {
   }
   if (slipId === "qingtan-bark") state.storyMilestones.qingtanVisited = true;
   if (slipId === "rice-straw") state.storyMilestones.riceVisited = true;
+  cleanQuizStackEntries();
   openPaperSlipReward(slipId, slipId === "ink-door" ? "openPaperShop" : "close", true);
 }
 
@@ -1347,6 +1397,7 @@ function getChapterOneStep() {
 }
 
 function updateHud() {
+  syncStoryMilestonesFromQuestProgress();
   ensureInventory();
   updateReputationLevel();
   coinText.textContent = state.coins;
@@ -2215,7 +2266,7 @@ const festivalTasks = [
     answer: "粉蜡笺",
     correctText: "没错。粉蜡笺经过填粉、涂蜡、砑光等处理，纸面更细腻平滑，适合小楷和精细线条。",
     hintText: "这张纸不一定适合小楷。小楷更需要线条稳定、纸面细腻、不容易洇墨。",
-    stamp: "细腻如玉"
+    stamp: "细腻如玉", slipId: "wax"
   },
   {
     id: "ink-landscape",
@@ -2403,6 +2454,7 @@ function answerFestivalTask(taskId, option) {
     openModal(chapterEvent, "modal", "story-chapter-modal", { replace: true });
     return;
   }
+  cleanQuizStackEntries();
   openFestivalReward(task, firstCompletion);
 }
 
@@ -2649,7 +2701,7 @@ function advanceMiniGame(timestamp = 0) {
 
   if (g.phase === "drying") {
     // 晒纸场：晾晒进度条
-    g.dryProgress += 0.4 * g.dryDir;
+    g.dryProgress += 24 * deltaMs / 1000 * g.dryDir;
     if (g.dryProgress >= 100) g.dryDir = -1;
     else if (g.dryProgress <= 0) g.dryDir = 1;
     const bar = miniGameCachedEl(g, "dryBar", "#dryBar");
@@ -2658,7 +2710,7 @@ function advanceMiniGame(timestamp = 0) {
     // 晾晒过程中不提示，完成后评价
   } else if (g.phase === 1) {
     // 阶段1：浸泡进度条自动走动
-    g.soakProgress += 0.5 * g.soakDir;
+    g.soakProgress += 30 * deltaMs / 1000 * g.soakDir;
     if (g.soakProgress >= 100) g.soakDir = -1;
     else if (g.soakProgress <= 0) g.soakDir = 1;
     const bar = miniGameCachedEl(g, "soakBar", "#soakBar");
@@ -2667,8 +2719,8 @@ function advanceMiniGame(timestamp = 0) {
     if (hint) { hint.innerHTML = ''; hint.style.color = 'var(--wood)'; }
   } else if (g.phase === 2) {
     // 阶段2：两个浓度bar独立移动
-    g.concBar1 += 0.8 * g.concBar1Dir;
-    g.concBar2 += 0.6 * g.concBar2Dir;
+    g.concBar1 += 48 * deltaMs / 1000 * g.concBar1Dir;
+    g.concBar2 += 36 * deltaMs / 1000 * g.concBar2Dir;
     if (g.concBar1 >= 100) { g.concBar1 = 100; g.concBar1Dir = -1; }
     if (g.concBar1 <= 0) { g.concBar1 = 0; g.concBar1Dir = 1; }
     if (g.concBar2 >= 100) { g.concBar2 = 100; g.concBar2Dir = -1; }
@@ -2690,7 +2742,7 @@ function advanceMiniGame(timestamp = 0) {
     if (hint) { hint.innerHTML = ''; hint.style.color = 'var(--wood)'; }
   } else if (g.phase === 3) {
     // 阶段3：原有指针移动逻辑
-    g.pos += g.dir * g.speed;
+    g.pos += g.dir * g.speed * 60 * deltaMs / 1000;
     if (g.pos >= 100) { g.pos = 100; g.dir = -1; }
     if (g.pos <= 0) { g.pos = 0; g.dir = 1; }
     const pointer = miniGameCachedEl(g, "pointer", "#pointer");
@@ -3372,6 +3424,10 @@ function openOrderBoard() {
     return;
   }
   const shuhua = getShuhuaState();
+  if (shuhua.finishedIds.includes("mounting_master") && !state.unlockedKnowledgeCards.has("millennium")) {
+    state.unlockedKnowledgeCards.add("millennium");
+    state.unlockedCards.add("纸寿千年");
+  }
   const orderCards = SHUHUA_ORDERS.map((order) => {
     const finished = shuhua.finishedIds.includes(order.id);
     const record = shuhua.results[order.id];
@@ -3433,6 +3489,7 @@ function showShuhuaOrderDetail(orderId) {
         <p class="shuhua-customer">客人：${order.customer}</p>
         <blockquote>${order.request}</blockquote>
         <p>${order.scene}</p>
+        ${order.customerDialogue ? `<p class="order-customer-dialogue">${order.customerDialogue}</p>` : ""}
         <div class="shuhua-order-tags">
           <span>难度 ${formatDifficulty(order.difficulty)}</span>
           <span>交付需要亲手制纸 ${deliveryRule.paperCost} 张</span>
@@ -3530,6 +3587,7 @@ function completeShuhuaOrder(orderId, selectedPaperId) {
   if (order.id === "misty_mountain" || order.id === "splash_bamboo") unlockPaperSlip("ink-door");
   if (order.id === "fine_flower_bird") unlockPaperSlip("glue-alum");
   if (order.id === "festival_sign" || order.id === "teahouse_poem") unlockPaperSlip("half-cooked");
+  if (order.id === "mounting_master") unlockPaperSlip("millennium");
   updateHud();
 
   pruneShuhuaPagesFromStack();
@@ -3565,6 +3623,7 @@ function showShuhuaOrderResult(order, selectedPaper, result, rewardCoins = 0, al
           <span class="shuhua-stamp">${alreadyFinished ? "回顾" : `+${rewardCoins}`}</span>
           <h3>科普解释</h3>
           <p>${order.knowledge}</p>
+          ${order.scienceTip ? `<h3>老街旧识</h3><p>${order.scienceTip}</p>` : ""}
         </aside>
       </div>
       <div class="reward-items">
@@ -3631,6 +3690,7 @@ function storyChapterEvent(label, text) {
 }
 
 function checkStoryProgress() {
+  syncStoryMilestonesFromQuestProgress();
   const has = (id) => state.unlockedKnowledgeCards.has(id);
   if (state.storyChapter === 1 && state.storyMilestones.paperBookOpened && state.storyMilestones.paperShopExam && state.storyMilestones.workshopMade && state.ordersCompleted >= 1) {
     state.storyChapter = 2;
