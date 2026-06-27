@@ -1324,25 +1324,6 @@ button {
     display: none;
   }
 
-  .modal-layer {
-    padding: 12px;
-  }
-
-  .modal-card {
-    width: min(92vw, 820px);
-    max-height: 80vh;
-    padding: clamp(16px, 4vw, 24px);
-    font-size: 16px;
-  }
-
-  .modal-card h2 {
-    font-size: clamp(24px, 7vw, 34px);
-  }
-
-  .modal-card h3 {
-    font-size: 20px;
-  }
-
   .modal-card p {
     font-size: 16px;
   }
@@ -1351,9 +1332,6 @@ button {
     width: min(92vw, 420px);
   }
 
-  .mobile-only {
-    display: inline-flex;
-  }
 }
 
 /* ========================================
