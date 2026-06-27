@@ -169,15 +169,26 @@
 .paper-pages-button { align-self: flex-start; min-width: auto; padding: 6px 10px; border: 2px solid rgba(219, 178, 111, 0.65); background: rgba(64, 38, 25, 0.78); color: #ffe7a8; box-shadow: 0 4px 10px rgba(0,0,0,0.22); border-radius: 4px; font: inherit; font-weight: 900; cursor: pointer; image-rendering: pixelated; }
 .paper-pages-button:hover { background: #5e4230; }
 .hud .paper-pages-button {
-  align-self: stretch;
+  flex: 0 0 auto;
+  align-self: flex-start;
   display: inline-flex;
   align-items: center;
-  min-height: 38px;
-  padding: 4px 9px;
+  justify-content: center;
+  pointer-events: auto;
+  min-width: 78px;
+  max-width: none;
+  min-height: 44px;
+  padding: 6px 10px;
+  margin-left: 0;
+  position: static;
+  right: auto;
+  border: 2px solid rgba(225, 184, 115, 0.85);
+  background: rgba(67, 42, 29, 0.88);
+  border-radius: 5px;
   font-size: 14px;
   line-height: 1.1;
   white-space: nowrap;
-  box-shadow: 0 3px 8px rgba(0,0,0,0.22);
+  box-shadow: 0 3px 8px rgba(0,0,0,0.25);
 }
 .workshop-story-button { width: 100%; margin: 4px 0 8px; }
 @media (max-width: 768px), (hover: none) and (pointer: coarse) { .paper-pages-button { min-height: 42px; font-size: 12px; } }
@@ -280,7 +291,7 @@ button {
   height: 100vh;
   min-height: 100vh;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: minmax(0, 1fr) auto;
   background:
     linear-gradient(180deg, #f7cd83 0%, #f3e5bd 44%, #89a95f 44%, #6d8d4f 100%);
 }
@@ -288,16 +299,19 @@ button {
 .hud {
   position: absolute;
   top: 8px;
-  left: 8px;
-  z-index: 20;
+  left: 10px;
+  right: 10px;
+  z-index: 30;
   display: flex;
-  align-items: stretch;
-  gap: 5px;
-  width: fit-content;
-  max-width: calc(100vw - 16px);
+  align-items: flex-start;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 9px;
   padding: 0;
+  margin: 0;
   background: transparent;
   border: 0;
+  box-shadow: none;
   pointer-events: none;
   color: var(--paper);
 }
@@ -305,29 +319,31 @@ button {
 .hud-item,
 .hud-task {
   pointer-events: auto;
-  min-height: 34px;
+  min-height: 44px;
   display: flex;
   flex-direction: column;
   justify-content: center;
   gap: 0;
-  padding: 3px 7px;
-  background: rgba(64, 38, 25, 0.82);
-  border: 2px solid rgba(219, 178, 111, 0.65);
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.22);
-  border-radius: 4px;
+  padding: 6px 10px;
+  background: rgba(67, 42, 29, 0.88);
+  border: 2px solid rgba(225, 184, 115, 0.85);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
+  border-radius: 5px;
 }
 
 .hud-item {
-  min-width: 52px;
+  flex: 0 0 auto;
+  min-width: 78px;
+  max-width: none;
   max-height: none;
 }
 
 .hud-item--reputation-level {
-  min-width: 0;
+  min-width: 118px;
 }
 
 .hud-item--crafted-paper {
-  min-width: 0;
+  min-width: 104px;
 }
 
 .hud-item--reputation-level strong,
@@ -337,11 +353,16 @@ button {
 }
 
 .hud-task {
-  flex: 0 1 380px;
-  max-width: min(380px, 36vw);
-  min-width: 280px;
-  line-height: 1.12;
-  padding: 4px 9px;
+  flex: 1 1 420px;
+  min-width: 320px;
+  max-width: 600px;
+  line-height: 1.25;
+  padding: 7px 12px;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .hud-label {
@@ -2271,6 +2292,10 @@ button {
   position: relative;
 }
 
+.hud.ui-layer-item {
+  position: absolute;
+}
+
 .modal-layer.ui-layer-item,
 .pause-layer.ui-layer-item,
 .toast.ui-layer-item {
@@ -2381,14 +2406,14 @@ button {
     display: grid;
   }
 
-  .hud {
+  .hud.ui-layer-item {
     position: relative;
     top: auto;
     left: auto;
     right: auto;
     pointer-events: auto;
-    flex-wrap: nowrap;
-    align-items: stretch;
+    flex-wrap: wrap;
+    align-items: flex-start;
     gap: 6px;
     padding: 6px;
     background: rgba(43, 27, 19, 0.88);
@@ -2408,9 +2433,10 @@ button {
   }
 
   .hud-task {
-    flex: 1 1 auto;
-    flex-basis: auto;
-    min-width: 0;
+    flex: 0 1 100%;
+    flex-basis: 100%;
+    min-width: 100%;
+    max-width: 100%;
   }
 
   .hud-label {
@@ -2423,9 +2449,9 @@ button {
   }
 
   .hud-task strong {
-    display: -webkit-box;
-    overflow: hidden;
-    -webkit-line-clamp: 2;
+    display: block;
+    overflow: visible;
+    -webkit-line-clamp: unset;
     -webkit-box-orient: vertical;
   }
 
@@ -7783,6 +7809,8 @@ button {
   color: var(--wood);
   line-height: 1.25;
   padding: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .task-step--done {
   color: var(--jade);
@@ -7808,9 +7836,13 @@ button {
 }
 
 .hud-task #taskSteps {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-line-clamp: 1;
+  display: block;
+  overflow: visible;
+  white-space: normal;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  -webkit-line-clamp: unset;
   -webkit-box-orient: vertical;
 }
 
