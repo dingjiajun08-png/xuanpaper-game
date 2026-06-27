@@ -1024,7 +1024,7 @@ function answerQuest(questId, option) {
     return;
   }
   openModal(`
-    <section class="paper-slip-reward-card"><img class="paper-slip-icon" src="${PAPER_PAGES[quest.page].asset}" alt="" onerror="this.onerror=null;this.hidden=true"><p class="paper-slip-kicker">七张纸页 · 老街苏醒</p><h2>纸页归位</h2><h3>${PAPER_PAGES[quest.page].title}</h3><p>${quest.reason}</p><div class="modal-actions"><button class="primary-btn" type="button" data-action="openWorkshop">进入工坊</button><button class="secondary-btn" type="button" data-action="openPaperPagesCodex">查看纸页</button></div></section>
+    <section class="paper-slip-reward-card"><img class="paper-slip-icon" src="${PAPER_PAGES[quest.page].asset}" alt="" onerror="this.onerror=null;this.hidden=true"><p class="paper-slip-kicker">七张纸页 · 老街苏醒</p><h2>纸页归位</h2><h3>${PAPER_PAGES[quest.page].title}</h3><p>${quest.reason}</p><div class="modal-actions"><button class="primary-btn" type="button" data-action="close">返回老街</button><button class="secondary-btn" type="button" data-action="openPaperPagesCodex">查看纸页</button></div></section>
   `, "modal", "paper-slip-reward-modal", { replace: true });
 }
 
@@ -2449,12 +2449,12 @@ function answerFestivalTask(taskId, option) {
     state.earnedStamps.add(task.stamp);
     if (task.slipId) unlockPaperSlip(task.slipId);
   }
+  cleanQuizStackEntries();
   const chapterEvent = checkStoryProgress();
   if (chapterEvent) {
     openModal(chapterEvent, "modal", "story-chapter-modal", { replace: true });
     return;
   }
-  cleanQuizStackEntries();
   openFestivalReward(task, firstCompletion);
 }
 
@@ -2697,30 +2697,31 @@ function advanceMiniGame(timestamp = 0) {
 
   // 用真实时间差替代硬编码帧率假设
   const deltaMs = g._lastTimestamp ? timestamp - g._lastTimestamp : 16;
+  const safeDeltaMs = Math.min(deltaMs, 50);
   g._lastTimestamp = timestamp;
 
   if (g.phase === "drying") {
     // 晒纸场：晾晒进度条
-    g.dryProgress += 24 * deltaMs / 1000 * g.dryDir;
-    if (g.dryProgress >= 100) g.dryDir = -1;
-    else if (g.dryProgress <= 0) g.dryDir = 1;
+    g.dryProgress += 24 * safeDeltaMs / 1000 * g.dryDir;
+    if (g.dryProgress >= 100) { g.dryProgress = 100; g.dryDir = -1; }
+    else if (g.dryProgress <= 0) { g.dryProgress = 0; g.dryDir = 1; }
     const bar = miniGameCachedEl(g, "dryBar", "#dryBar");
     const hint = miniGameCachedEl(g, "dryHint", "#dryHint");
     if (bar) bar.style.width = `${g.dryProgress}%`;
     // 晾晒过程中不提示，完成后评价
   } else if (g.phase === 1) {
     // 阶段1：浸泡进度条自动走动
-    g.soakProgress += 30 * deltaMs / 1000 * g.soakDir;
-    if (g.soakProgress >= 100) g.soakDir = -1;
-    else if (g.soakProgress <= 0) g.soakDir = 1;
+    g.soakProgress += 30 * safeDeltaMs / 1000 * g.soakDir;
+    if (g.soakProgress >= 100) { g.soakProgress = 100; g.soakDir = -1; }
+    else if (g.soakProgress <= 0) { g.soakProgress = 0; g.soakDir = 1; }
     const bar = miniGameCachedEl(g, "soakBar", "#soakBar");
     const hint = miniGameCachedEl(g, "phase1Hint", "#phase1Hint");
     if (bar) bar.style.width = `${g.soakProgress}%`;
     if (hint) { hint.innerHTML = ''; hint.style.color = 'var(--wood)'; }
   } else if (g.phase === 2) {
     // 阶段2：两个浓度bar独立移动
-    g.concBar1 += 48 * deltaMs / 1000 * g.concBar1Dir;
-    g.concBar2 += 36 * deltaMs / 1000 * g.concBar2Dir;
+    g.concBar1 += 48 * safeDeltaMs / 1000 * g.concBar1Dir;
+    g.concBar2 += 36 * safeDeltaMs / 1000 * g.concBar2Dir;
     if (g.concBar1 >= 100) { g.concBar1 = 100; g.concBar1Dir = -1; }
     if (g.concBar1 <= 0) { g.concBar1 = 0; g.concBar1Dir = 1; }
     if (g.concBar2 >= 100) { g.concBar2 = 100; g.concBar2Dir = -1; }
@@ -2734,7 +2735,7 @@ function advanceMiniGame(timestamp = 0) {
 
     const bothInZone = g.concBar1 >= 60 && g.concBar1 <= 80 && g.concBar2 >= 60 && g.concBar2 <= 80;
     if (bothInZone) {
-      g.concStableTime += deltaMs;
+      g.concStableTime += safeDeltaMs;
     } else {
       g.concStableTime = 0;
     }
@@ -2742,7 +2743,7 @@ function advanceMiniGame(timestamp = 0) {
     if (hint) { hint.innerHTML = ''; hint.style.color = 'var(--wood)'; }
   } else if (g.phase === 3) {
     // 阶段3：原有指针移动逻辑
-    g.pos += g.dir * g.speed * 60 * deltaMs / 1000;
+    g.pos += g.dir * g.speed * 60 * safeDeltaMs / 1000;
     if (g.pos >= 100) { g.pos = 100; g.dir = -1; }
     if (g.pos <= 0) { g.pos = 0; g.dir = 1; }
     const pointer = miniGameCachedEl(g, "pointer", "#pointer");

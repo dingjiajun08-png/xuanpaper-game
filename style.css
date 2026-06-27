@@ -166,8 +166,19 @@
 .paper-codex-locked { filter: grayscale(.8); background: rgba(105,82,60,.16); }.paper-codex-locked small { color: var(--wood); }
 .order-paper-case { margin: 0; padding: 8px 10px; border-left: 3px solid var(--gold); background: rgba(231,166,66,.1); font-size: 12px; line-height: 1.55; }.order-paper-case span { color: var(--wood); }
 .workshop-story-note { margin: 8px 0 4px; padding: 8px 10px; color: var(--brick); background: rgba(157,79,52,.08); border-left: 3px solid var(--brick); font-size: 12px; font-weight: 800; line-height: 1.55; }
-.paper-pages-button { align-self: stretch; min-width: 94px; padding: 8px 10px; border: 3px solid var(--paper-dark); background: #4a3528; color: #ffe7a8; box-shadow: inset 0 0 0 2px #6d492f; font: inherit; font-weight: 900; cursor: pointer; image-rendering: pixelated; }
+.paper-pages-button { align-self: flex-start; min-width: auto; padding: 6px 10px; border: 2px solid rgba(219, 178, 111, 0.65); background: rgba(64, 38, 25, 0.78); color: #ffe7a8; box-shadow: 0 4px 10px rgba(0,0,0,0.22); border-radius: 4px; font: inherit; font-weight: 900; cursor: pointer; image-rendering: pixelated; }
 .paper-pages-button:hover { background: #5e4230; }
+.hud .paper-pages-button {
+  align-self: stretch;
+  display: inline-flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 4px 9px;
+  font-size: 14px;
+  line-height: 1.1;
+  white-space: nowrap;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.22);
+}
 .workshop-story-button { width: 100%; margin: 4px 0 8px; }
 @media (max-width: 768px), (hover: none) and (pointer: coarse) { .paper-pages-button { min-height: 42px; font-size: 12px; } }
 .paper-slip-inline { margin: 9px 0 0; color: var(--brick); font-weight: 900; }
@@ -221,13 +232,13 @@ button {
 .tag {
   display: inline-flex;
   align-items: center;
-  min-height: 30px;
-  padding: 4px 10px;
+  min-height: 26px;
+  padding: 2px 8px;
   background: #f4d899;
   border: 3px solid var(--ink);
   box-shadow: 3px 3px 0 rgba(45, 36, 27, 0.15);
   font-weight: 700;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .primary-btn,
@@ -263,6 +274,8 @@ button {
 }
 
 .game-screen {
+  position: relative;
+  overflow: hidden;
   width: 100vw;
   height: 100vh;
   min-height: 100vh;
@@ -273,40 +286,48 @@ button {
 }
 
 .hud {
-  position: relative;
-  z-index: 5;
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 20;
   display: flex;
   align-items: stretch;
-  gap: 6px;
-  padding: 8px;
-  background: #4a2a1c;
-  border-bottom: 4px solid #2d1810;
+  gap: 5px;
+  width: fit-content;
+  max-width: calc(100vw - 16px);
+  padding: 0;
+  background: transparent;
+  border: 0;
+  pointer-events: none;
   color: var(--paper);
 }
 
 .hud-item,
 .hud-task {
-  min-height: 54px;
+  pointer-events: auto;
+  min-height: 34px;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 2px;
-  padding: 6px 10px;
-  background: #3d2a1e;
-  border: 3px solid #d7b16f;
-  box-shadow: inset 0 0 0 1px rgba(255, 222, 160, 0.08);
+  gap: 0;
+  padding: 3px 7px;
+  background: rgba(64, 38, 25, 0.82);
+  border: 2px solid rgba(219, 178, 111, 0.65);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.22);
+  border-radius: 4px;
 }
 
 .hud-item {
-  min-width: 96px;
+  min-width: 52px;
+  max-height: none;
 }
 
 .hud-item--reputation-level {
-  min-width: 118px;
+  min-width: 0;
 }
 
 .hud-item--crafted-paper {
-  min-width: 104px;
+  min-width: 0;
 }
 
 .hud-item--reputation-level strong,
@@ -316,18 +337,23 @@ button {
 }
 
 .hud-task {
-  flex: 1;
-  min-width: 0;
+  flex: 0 1 380px;
+  max-width: min(380px, 36vw);
+  min-width: 280px;
+  line-height: 1.12;
+  padding: 4px 9px;
 }
 
 .hud-label {
-  font-size: 12px;
+  font-size: 10px;
+  line-height: 1;
   opacity: 0.8;
   font-weight: 700;
 }
 
 .hud strong {
-  font-size: 18px;
+  font-size: 15px;
+  line-height: 1;
 }
 
 /* ========================================
@@ -378,12 +404,12 @@ button {
 .control-bar {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
   justify-content: center;
-  padding: 10px 12px 14px;
-  background: #2f2119;
-  border-top: 4px solid #130d0a;
+  padding: 5px 8px 8px;
+  background: rgba(34, 22, 15, 0.74);
+  border-top: 2px solid rgba(180, 140, 80, 0.38);
 }
 
 .mobile-input .control-bar {
@@ -1257,9 +1283,15 @@ button {
 
 @media (max-width: 760px) {
   .hud {
+    position: relative;
+    top: auto;
+    left: auto;
+    right: auto;
+    pointer-events: auto;
     flex-wrap: wrap;
     gap: 6px;
-    padding: 8px;
+    padding: 6px;
+    background: rgba(43, 27, 19, 0.88);
   }
 
   .hud-item {
@@ -2350,10 +2382,16 @@ button {
   }
 
   .hud {
+    position: relative;
+    top: auto;
+    left: auto;
+    right: auto;
+    pointer-events: auto;
     flex-wrap: nowrap;
     align-items: stretch;
     gap: 6px;
     padding: 6px;
+    background: rgba(43, 27, 19, 0.88);
     font-size: 14px;
   }
 
@@ -7738,17 +7776,13 @@ button {
 /* ========================================
    HUD任务步骤列表
    ======================================== */
-.hud-task {
-  flex: 1;
-  min-width: 160px;
-}
 .task-step {
   display: block;
   font-size: 11px;
   font-weight: 600;
   color: var(--wood);
-  line-height: 1.6;
-  padding: 1px 0;
+  line-height: 1.25;
+  padding: 0;
 }
 .task-step--done {
   color: var(--jade);
@@ -7756,12 +7790,12 @@ button {
 }
 
 .task-step--chapter {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
   color: var(--gold);
   border-bottom: 1px solid rgba(231,166,66,0.25);
-  padding-bottom: 2px;
-  margin-bottom: 2px;
+  padding-bottom: 1px;
+  margin-bottom: 1px;
 }
 .task-step--sub {
   font-size: 10px;
@@ -7771,4 +7805,17 @@ button {
 .task-step--active {
   font-weight: 800;
   color: var(--gold);
+}
+
+.hud-task #taskSteps {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+}
+
+.hud-task .task-step--chapter {
+  border-bottom: 0;
+  margin-bottom: 0;
+  padding-bottom: 0;
 }
