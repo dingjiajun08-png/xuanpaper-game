@@ -1,6 +1,9 @@
 const MAP_REFERENCE = { width: 1536, height: 1024 };
 const PLAYER_SPAWN = { x: MAP_REFERENCE.width * 0.48, y: MAP_REFERENCE.height * 0.73 };
 const joystickVector = { x: 0, y: 0 };
+const FRAME_MS = 1000 / 60;
+const MAX_PLAYER_DELTA_MS = 50;
+const PLAYER_SPEED = 5.0;
 const PLAYER_SPRITE = {
   width: 48,
   height: 64,
@@ -121,7 +124,7 @@ const state = {
   paperPages: { qingtan: false, straw: false, water: false, craft: false, drying: false, paperNature: false, heritage: false },
   completedQuests: new Set(),
   task: "探索宣纸铺与纸境千年",
-  player: { x: PLAYER_SPAWN.x, y: PLAYER_SPAWN.y, speed: 4.2, direction: "down", frame: 0, lastFrameAt: 0 },
+  player: { x: PLAYER_SPAWN.x, y: PLAYER_SPAWN.y, speed: PLAYER_SPEED, direction: "down", frame: 0, lastFrameAt: 0 },
   camera: { x: 0, y: 0, width: 0, height: 0 },
   map: {
     naturalWidth: MAP_REFERENCE.width,
@@ -791,6 +794,22 @@ const streetRepairButton = document.querySelector("#streetRepairButton");
 
 // NPC 对话气泡 DOM 缓存，applyMapLayout 时重置
 let _npcDialogueCache = null;
+let _npcDialogueRenderKey = "";
+let _lastNearbyNpcDialogueId = null;
+let _depthSortedEntitiesCache = null;
+let _depthSortedStaticReady = false;
+let _lastInteractionPromptHtml = "";
+let _lastInteractionPromptVisible = false;
+let _debugLayerBuilt = false;
+let _gameLoopStarted = false;
+let _gameLoopFrameId = null;
+// 移动端节能：缓存上一帧的 camera/player 位置，避免静止时重复写 DOM
+let _lastCameraTransform = "";
+let _lastPlayerTransform = "";
+let _lastPlayerX = -1;
+let _lastPlayerY = -1;
+let _lastGameLoopAt = 0;
+let _lastJoystickPointerTime = 0;
 
 function paperPageCount() {
   return Object.values(state.paperPages).filter(Boolean).length;
@@ -1469,8 +1488,10 @@ function applyMapLayout(preservePlayer = true) {
   const playerReference = state.map.ready && preservePlayer
     ? { x: state.player.x / previousScaleX, y: state.player.y / previousScaleY }
     : PLAYER_SPAWN;
+  // 移动端根据屏幕尺寸动态计算缩放，避免 1x 硬编码导致视野过窄
+  // 参考视口 860×580 确保大多数手机可见 ~45% 地图宽度，角色不低于 30×40px
   const fitScale = isMobileInput()
-    ? 1
+    ? clamp(Math.min(rect.width / 860, rect.height / 580), 0.62, 0.9)
     : Math.max(
       1,
       rect.width / state.map.naturalWidth,
@@ -1502,6 +1523,15 @@ function applyMapLayout(preservePlayer = true) {
     streetForeground.style.height = `${state.map.height}px`;
   }
   _npcDialogueCache = null;
+  _npcDialogueRenderKey = "";
+  _lastNearbyNpcDialogueId = null;
+  _depthSortedEntitiesCache = null;
+  _depthSortedStaticReady = false;
+  _debugLayerBuilt = false;
+  _lastCameraTransform = "";
+  _lastPlayerTransform = "";
+  _lastPlayerX = -1;
+  _lastPlayerY = -1;
   state.map.ready = true;
   updateCamera();
 }
@@ -1584,14 +1614,25 @@ function tryMove(dx, dy) {
   if (!collidesAt(state.player.x, nextY)) state.player.y = nextY;
 }
 
+function movePlayer(dx, dy) {
+  const steps = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) / state.player.speed));
+  const stepX = dx / steps;
+  const stepY = dy / steps;
+  for (let i = 0; i < steps; i += 1) {
+    tryMove(stepX, stepY);
+  }
+}
+
 function directionFromDelta(dx, dy) {
   if (Math.abs(dx) > Math.abs(dy)) return dx > 0 ? "right" : "left";
   return dy > 0 ? "down" : "up";
 }
 
 function setPlayerSprite(direction = state.player.direction, frame = state.player.frame) {
+  const nextFrame = frame ? 1 : 0;
+  if (state.player.direction === direction && state.player.frame === nextFrame) return;
   state.player.direction = direction;
-  state.player.frame = frame ? 1 : 0;
+  state.player.frame = nextFrame;
   playerEl.classList.remove("dir-down", "dir-right", "dir-left", "dir-up", "frame-0", "frame-1");
   playerEl.classList.add(`dir-${state.player.direction}`, `frame-${state.player.frame}`);
 }
@@ -1630,10 +1671,35 @@ function getInteractionPrompt(zone) {
   return zone.prompt;
 }
 
+function getNpcDialogueEntries() {
+  if (!_npcDialogueCache) {
+    _npcDialogueCache = Array.from(document.querySelectorAll("[data-npc-dialogue]"));
+  }
+  return _npcDialogueCache;
+}
+
+function getNpcDialogueRenderKey(nearbyId) {
+  return [
+    nearbyId || "",
+    state.storyChapter,
+    state.ordersCompleted,
+    state.completedQuests.size,
+    state.paperPages.paperNature ? 1 : 0,
+    state.storyMilestones.workshopMade ? 1 : 0,
+    state.storyMilestones.firstPaperShownToGrandma ? 1 : 0,
+    state.upgrades.paperShopSign ? 1 : 0,
+    state.upgrades.workshopTools ? 1 : 0,
+    state.upgrades.dryingRacks ? 1 : 0,
+    state.upgrades.marketBooths ? 1 : 0,
+    state.upgrades.museumCabinet ? 1 : 0,
+    JSON.stringify(state.npcDialogueIndex || {})
+  ].join("|");
+}
+
 function getNearbyNpcDialogue() {
   if (!state.map.ready) return null;
   let nearest = null;
-  document.querySelectorAll("[data-npc-dialogue]").forEach((npc) => {
+  getNpcDialogueEntries().forEach((npc) => {
     const id = npc.dataset.npcDialogue;
     const dialogue = MARKET_NPC_DIALOGUES[id];
     if (!dialogue) return;
@@ -1650,7 +1716,10 @@ function getNearbyNpcDialogue() {
 
 function updateNpcDialogueBubbles() {
   const nearby = getNearbyNpcDialogue();
-  state.nearbyNpcDialogueId = nearby?.id || null;
+  const nearbyId = nearby?.id || null;
+  const renderKey = getNpcDialogueRenderKey(nearbyId);
+  state.nearbyNpcDialogueId = nearbyId;
+  if (renderKey === _npcDialogueRenderKey && nearbyId === _lastNearbyNpcDialogueId) return nearby;
   if (!_npcDialogueCache) {
     _npcDialogueCache = Array.from(document.querySelectorAll("[data-npc-dialogue]"));
   }
@@ -1682,6 +1751,8 @@ function updateNpcDialogueBubbles() {
     npc.classList.toggle("npc-dialogue--nearby", id === state.nearbyNpcDialogueId);
     bubble.dataset.hint = getNpcInteractionHint(id);
   });
+  _npcDialogueRenderKey = renderKey;
+  _lastNearbyNpcDialogueId = nearbyId;
   return nearby;
 }
 
@@ -1836,35 +1907,68 @@ function mapPointFromClient(clientX, clientY) {
 }
 
 function updateDepthSortedEntities() {
-  document.querySelectorAll("[data-depth-sort], .map-entity, .npc").forEach((entity) => {
-    const depthY = Number(entity.dataset.depthY);
-    const fallbackY = Number.parseFloat(entity.style.top) || 0;
-    const y = Number.isFinite(depthY) ? depthY : fallbackY;
-    entity.style.zIndex = String(1000 + Math.round(y));
-  });
+  if (!_depthSortedEntitiesCache) {
+    _depthSortedEntitiesCache = Array.from(document.querySelectorAll("[data-depth-sort], .map-entity, .npc"));
+    _depthSortedStaticReady = false;
+  }
+  if (!_depthSortedStaticReady) {
+    _depthSortedEntitiesCache.forEach((entity) => {
+      if (entity === playerEl) return;
+      const depthY = Number(entity.dataset.depthY);
+      const fallbackY = Number.parseFloat(entity.style.top) || 0;
+      const y = Number.isFinite(depthY) ? depthY : fallbackY;
+      entity.style.zIndex = String(1000 + Math.round(y));
+    });
+    _depthSortedStaticReady = true;
+  }
+  if (playerEl) {
+    const depthY = Number(playerEl.dataset.depthY);
+    const y = Number.isFinite(depthY) ? depthY : state.player.y;
+    playerEl.style.zIndex = String(1000 + Math.round(y));
+  }
+}
+
+function setInteractionPrompt(html, visible) {
+  if (visible && html !== _lastInteractionPromptHtml) {
+    interactionPrompt.innerHTML = html;
+    _lastInteractionPromptHtml = html;
+  }
+  const isVisible = !interactionPrompt.classList.contains("hidden");
+  if (visible !== isVisible) {
+    interactionPrompt.classList.toggle("hidden", !visible);
+  }
+  _lastInteractionPromptVisible = visible;
 }
 
 function updateMap() {
   try {
     updateCamera();
-    mapWorld.style.transform = `translate(${-state.camera.x}px, ${-state.camera.y}px)`;
-    playerEl.style.left = `${state.player.x}px`;
-    playerEl.style.top = `${state.player.y}px`;
+    // 节能：camera transform 不变时不重复写 DOM
+    const camTransform = `translate3d(${-state.camera.x}px, ${-state.camera.y}px, 0)`;
+    if (camTransform !== _lastCameraTransform) {
+      mapWorld.style.transform = camTransform;
+      _lastCameraTransform = camTransform;
+    }
+    // 节能：player transform 不变时不重复写 DOM
+    const playerTransform = `translate3d(${state.player.x}px, ${state.player.y}px, 0) translate(-50%, -100%)`;
+    if (playerTransform !== _lastPlayerTransform) {
+      playerEl.style.transform = playerTransform;
+      _lastPlayerTransform = playerTransform;
+    }
     playerEl.dataset.depthY = String(state.player.y);
     updateDepthSortedEntities();
 
     state.activeZone = getActiveZone();
     const nearbyNpc = updateNpcDialogueBubbles();
     if (nearbyNpc && state.gameState === "playing") {
-      interactionPrompt.innerHTML = isMobileInput()
+      const promptHtml = isMobileInput()
         ? `点击${MARKET_NPC_DIALOGUES[nearbyNpc.id]?.name || "NPC"}`
         : getNpcInteractionPrompt(nearbyNpc.id);
-      interactionPrompt.classList.remove("hidden");
+      setInteractionPrompt(promptHtml, true);
     } else if (state.activeZone && state.gameState === "playing") {
-      interactionPrompt.innerHTML = getInteractionPrompt(state.activeZone);
-      interactionPrompt.classList.remove("hidden");
+      setInteractionPrompt(getInteractionPrompt(state.activeZone), true);
     } else {
-      interactionPrompt.classList.add("hidden");
+      setInteractionPrompt("", false);
     }
 
     if (state.debugMode) renderDebugLayer();
@@ -1877,6 +1981,11 @@ function updateMap() {
 
 function gameLoop(timestamp = 0) {
   try {
+    const elapsedMs = _lastGameLoopAt ? timestamp - _lastGameLoopAt : FRAME_MS;
+    _lastGameLoopAt = timestamp;
+    const safeDeltaMs = clamp(elapsedMs, 0, MAX_PLAYER_DELTA_MS);
+    const frameScale = safeDeltaMs / FRAME_MS;
+
     if (state.gameState === "playing") {
       let inputX = 0;
       let inputY = 0;
@@ -1887,14 +1996,21 @@ function gameLoop(timestamp = 0) {
 
       if (inputX || inputY) {
         const length = Math.hypot(inputX, inputY);
-        tryMove((inputX / length) * state.player.speed, (inputY / length) * state.player.speed);
+        movePlayer((inputX / length) * state.player.speed * frameScale, (inputY / length) * state.player.speed * frameScale);
       } else if (joystickVector.x || joystickVector.y) {
         inputX = joystickVector.x;
         inputY = joystickVector.y;
-        tryMove(inputX * state.player.speed, inputY * state.player.speed);
+        movePlayer(inputX * state.player.speed * frameScale, inputY * state.player.speed * frameScale);
       }
       updatePlayerAnimation(inputX, inputY, timestamp);
-      updateMap();
+      // 节能：玩家位置未变且无输入时，跳过 updateMap 避免每帧 DOM 写入和碰撞检测
+      const hasInput = inputX !== 0 || inputY !== 0;
+      const playerMoved = state.player.x !== _lastPlayerX || state.player.y !== _lastPlayerY;
+      if (hasInput || playerMoved || state.miniGame?.running) {
+        updateMap();
+        _lastPlayerX = state.player.x;
+        _lastPlayerY = state.player.y;
+      }
     } else {
       setPlayerSprite(state.player.direction, 0);
     }
@@ -1903,7 +2019,14 @@ function gameLoop(timestamp = 0) {
   } catch (e) {
     console.error("gameLoop error:", e);
   }
-  requestAnimationFrame(gameLoop);
+  if (_gameLoopStarted) _gameLoopFrameId = requestAnimationFrame(gameLoop);
+}
+
+function startGameLoop() {
+  if (_gameLoopStarted) return;
+  _gameLoopStarted = true;
+  _lastGameLoopAt = 0;
+  _gameLoopFrameId = requestAnimationFrame(gameLoop);
 }
 
 function openComingSoon(zone) {
@@ -3729,18 +3852,21 @@ function checkStoryProgress() {
 
 function renderDebugLayer() {
   if (!mapDebugLayer) return;
-  mapDebugLayer.innerHTML = "";
-  [...collisionBoxes.map((box) => ({ ...scaleRect(box), type: "collision", label: box.name || box.id })),
-   ...interactionZones.map((zone) => ({ ...scaleRect(zone), type: "interaction", label: zone.name || zone.id }))].forEach((box) => {
-    const el = document.createElement("div");
-    el.className = `debug-box ${box.type}`;
-    el.style.left = `${box.x}px`;
-    el.style.top = `${box.y}px`;
-    el.style.width = `${box.width}px`;
-    el.style.height = `${box.height}px`;
-    el.textContent = box.label;
-    mapDebugLayer.appendChild(el);
-  });
+  if (!_debugLayerBuilt) {
+    mapDebugLayer.innerHTML = "";
+    [...collisionBoxes.map((box) => ({ ...scaleRect(box), type: "collision", label: box.name || box.id })),
+     ...interactionZones.map((zone) => ({ ...scaleRect(zone), type: "interaction", label: zone.name || zone.id }))].forEach((box) => {
+      const el = document.createElement("div");
+      el.className = `debug-box ${box.type}`;
+      el.style.left = `${box.x}px`;
+      el.style.top = `${box.y}px`;
+      el.style.width = `${box.width}px`;
+      el.style.height = `${box.height}px`;
+      el.textContent = box.label;
+      mapDebugLayer.appendChild(el);
+    });
+    _debugLayerBuilt = true;
+  }
   const currentZone = state.activeZone ? `${state.activeZone.name} (${state.activeZone.id})` : "无";
   if (debugReadout) {
     debugReadout.textContent = [
@@ -3756,7 +3882,10 @@ function setDebugMode(enabled) {
   state.debugMode = enabled;
   mapDebugLayer?.classList.toggle("visible", enabled);
   debugReadout?.classList.toggle("hidden", !enabled);
-  if (!enabled && mapDebugLayer) mapDebugLayer.innerHTML = "";
+  if (!enabled && mapDebugLayer) {
+    mapDebugLayer.innerHTML = "";
+    _debugLayerBuilt = false;
+  }
   updateMap();
 }
 
@@ -3997,6 +4126,8 @@ mobileControls?.addEventListener("pointerdown", (event) => {
   if (state.gameState !== "playing") return;
   event.preventDefault();
   event.stopPropagation();
+  // 记录 pointerdown 时间戳，供 mousedown 防抖判断（触屏会同时触发两者）
+  _lastJoystickPointerTime = performance.now();
   state.joystickActive = true;
   state.joystickPointerId = event.pointerId;
   mobileControls.setPointerCapture?.(event.pointerId);
@@ -4004,6 +4135,9 @@ mobileControls?.addEventListener("pointerdown", (event) => {
 });
 
 mobileControls?.addEventListener("mousedown", (event) => {
+  // 触屏设备会同时触发 pointerdown + mousedown，通过时间差（<100ms）跳过重复的 mousedown
+  // 保留此监听用于桌面端纯鼠标环境（pointerdown 也可能被某些浏览器忽略）
+  if (performance.now() - _lastJoystickPointerTime < 100) return;
   if (state.gameState !== "playing") return;
   event.preventDefault();
   event.stopPropagation();
@@ -4064,6 +4198,13 @@ window.addEventListener("orientationchange", () => {
   resizeCamera();
   if (state.gameState === "playing") updateMap();
 });
+
+// iOS Safari 键盘弹出/收起或地址栏变化时，resize/orientationchange 不会触发
+// 通过 visualViewport 事件更新 --vh，避免 UI 被键盘或地址栏遮挡
+if (window.visualViewport) {
+  window.visualViewport.addEventListener("resize", setMobileVH);
+  window.visualViewport.addEventListener("scroll", setMobileVH);
+}
 
 document.addEventListener("touchmove", (event) => {
   if (currentPlatform === "desktop" || event.target.closest(".modal-card")) return;
@@ -4134,7 +4275,7 @@ mapViewport.addEventListener("mousedown", () => {
 updateHud();
 detectPlatform();       // 初始化时判定平台
 resizeCamera();          // 触发一次地图布局
-requestAnimationFrame(gameLoop);
+startGameLoop();
 
 // ========================================
 // 全局错误处理：避免 gameLoop 之外的异常静默丢失
