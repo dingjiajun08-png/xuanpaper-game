@@ -1303,29 +1303,6 @@ button {
 }
 
 @media (max-width: 760px) {
-  .hud {
-    position: relative;
-    top: auto;
-    left: auto;
-    right: auto;
-    pointer-events: auto;
-    flex-wrap: wrap;
-    gap: 6px;
-    padding: 6px;
-    background: rgba(43, 27, 19, 0.88);
-  }
-
-  .hud-item {
-    flex: 1;
-    min-width: 120px;
-    min-height: 46px;
-    padding: 6px 10px;
-  }
-
-  .hud-task {
-    flex-basis: 100%;
-  }
-
   .report-grid {
     grid-template-columns: 1fr;
   }
