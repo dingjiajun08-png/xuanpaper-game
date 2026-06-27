@@ -304,7 +304,12 @@ button {
   min-width: 118px;
 }
 
-.hud-item--reputation-level strong {
+.hud-item--crafted-paper {
+  min-width: 104px;
+}
+
+.hud-item--reputation-level strong,
+.hud-item--crafted-paper strong {
   font-size: 15px;
   white-space: nowrap;
 }
@@ -7039,6 +7044,12 @@ button {
   gap: 8px;
 }
 
+.shuhua-stock-note {
+  margin: 0;
+  color: #315241;
+  font-weight: 900;
+}
+
 .shuhua-board-stats span,
 .shuhua-order-tags span,
 .shuhua-paper-tags span {
@@ -7233,6 +7244,14 @@ button {
     #fff8e7;
   border: 3px solid #6a8c74;
   box-shadow: 5px 5px 0 rgba(46, 51, 48, 0.13);
+}
+
+.handmade-exhibit-panel {
+  color: #2e3330;
+}
+
+.handmade-exhibit-panel .street-repair-card {
+  margin-top: 12px;
 }
 
 .street-repair-card.is-done {

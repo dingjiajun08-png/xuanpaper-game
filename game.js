@@ -116,6 +116,8 @@ const state = {
   orderQueue: [],
   orderJudgments: new Set(),
   shuhuaOrders: { completed: 0, currentOrderId: null, finishedIds: [], perfectCount: 0, results: {} },
+  inventory: { craftedPaper: 0 },
+  museumExhibits: {},
   paperPages: { qingtan: false, straw: false, water: false, craft: false, drying: false, paperNature: false, heritage: false },
   completedQuests: new Set(),
   task: "探索宣纸铺与纸境千年",
@@ -627,6 +629,22 @@ const SHUHUA_ORDERS = Object.freeze([
     reward: { perfectCoins: 8, acceptableCoins: 5, wrongCoins: 2 }
   },
   {
+    id: "mounting_master",
+    customer: "装裱师傅",
+    title: "托裱修复用纸",
+    request: "我要托裱一幅旧画，纸要有韧性，湿了也不能一扯就坏，最好带两张来。",
+    scene: "装裱师傅把旧画边角掀开给宣屿看，纸要在水汽和托裱中撑住画心。",
+    bestPaper: "shu_xuan",
+    acceptablePapers: ["ban_shu_xuan"],
+    wrongPapers: ["sheng_xuan"],
+    difficulty: 4,
+    knowledge: "装裱和修复更看重纸张的韧性、稳定与耐久，能承受湿润、托裱和长期保存的考验。",
+    perfectFeedback: "两张纸韧性足，托裱时边角稳定，旧画终于能重新展开。",
+    acceptableFeedback: "纸张基本能用，只是局部湿润后还需要师傅多压一压。",
+    wrongFeedback: "纸性太散，遇水后边缘容易变形，托裱旧画不够稳妥。",
+    reward: { perfectCoins: 8, acceptableCoins: 5, wrongCoins: 2 }
+  },
+  {
     id: "teahouse_poem",
     customer: "茶馆掌柜",
     title: "雅集诗笺",
@@ -643,6 +661,20 @@ const SHUHUA_ORDERS = Object.freeze([
     reward: { perfectCoins: 8, acceptableCoins: 5, wrongCoins: 2 }
   }
 ]);
+
+const DEFAULT_SHUHUA_DELIVERY_RULE = Object.freeze({
+  paperCost: 1,
+  coins: 15,
+  reputation: 8,
+  coinsReason: "完成书画铺用纸委托",
+  reputationReason: "书画铺顾客认可了宣屿做的纸"
+});
+
+const SHUHUA_DELIVERY_RULES = Object.freeze({
+  exam_script: { paperCost: 1, coins: 15, reputation: 6, coinsReason: "完成书生练字用纸订单", reputationReason: "书画铺顾客认可了宣屿做的纸" },
+  misty_mountain: { paperCost: 1, coins: 20, reputation: 8, coinsReason: "完成画师试墨订单", reputationReason: "画师认可了宣纸的纸性" },
+  mounting_master: { paperCost: 2, coins: 30, reputation: 10, coinsReason: "完成装裱师傅订单", reputationReason: "书画铺订单完成" }
+});
 
 const legacyKnowledgeCardIds = [
   "青檀树皮",
@@ -740,6 +772,7 @@ const toast = document.querySelector("#toast");
 const coinText = document.querySelector("#coinText");
 const reputationText = document.querySelector("#reputationText");
 const reputationLevelText = document.querySelector("#reputationLevelText");
+const craftedPaperText = document.querySelector("#craftedPaperText");
 const taskSteps = document.querySelector("#taskSteps");
 const paperPagesButton = document.querySelector("#paperPagesButton");
 const streetRepairButton = document.querySelector("#streetRepairButton");
@@ -749,6 +782,54 @@ let _npcDialogueCache = null;
 
 function paperPageCount() {
   return Object.values(state.paperPages).filter(Boolean).length;
+}
+
+function ensureInventory() {
+  state.inventory = state.inventory || {};
+  state.inventory.craftedPaper = Math.max(0, Number(state.inventory.craftedPaper) || 0);
+  return state.inventory;
+}
+
+function ensureMuseumExhibits() {
+  state.museumExhibits = state.museumExhibits || {};
+  return state.museumExhibits;
+}
+
+function craftedPaperCount() {
+  return ensureInventory().craftedPaper;
+}
+
+// 工坊产出的纸统一进入库存，后续主线、订单、展柜都从这里消耗。
+function addCraftedPaper(amount = 1) {
+  const value = Math.max(0, Number(amount) || 0);
+  if (!value) return 0;
+  const inventory = ensureInventory();
+  const wasFirstPaper = inventory.craftedPaper === 0 && !state.storyMilestones.workshopMade;
+  inventory.craftedPaper += value;
+  if (wasFirstPaper) {
+    state.storyMilestones.workshopMade = true;
+    if (state.mainQuest) state.mainQuest.step = "return_to_grandma";
+    state.task = "带着亲手做出的宣纸回宣纸铺找外婆。";
+  } else if (state.storyMilestones.firstPaperShownToGrandma) {
+    state.task = "可以去书画铺接取用纸订单，或继续在工坊制作宣纸。";
+  }
+  updateHud();
+  showToast(`获得 ${value} 张亲手制作的宣纸。`);
+  return value;
+}
+
+function consumeCraftedPaper(amount, shortageMessage = "还需要亲手制作的宣纸，请先去工坊做纸。") {
+  const value = Math.max(0, Number(amount) || 0);
+  const inventory = ensureInventory();
+  if (inventory.craftedPaper < value) {
+    state.task = "亲手制作的宣纸不足，请先去工坊做纸。";
+    updateHud();
+    showToast(shortageMessage);
+    return false;
+  }
+  inventory.craftedPaper -= value;
+  updateHud();
+  return true;
 }
 
 function getReputationLevelInfo(reputation = state.reputation) {
@@ -1164,7 +1245,7 @@ function getStoryChapterTitle() {
 }
 
 function paperSlipCount() {
-  return state.unlockedKnowledgeCards.size;
+  return PAPER_SLIPS.filter((slip) => state.unlockedKnowledgeCards.has(slip.id)).length;
 }
 
 function unlockPaperSlip(id) {
@@ -1259,16 +1340,19 @@ function getChapterOneStep() {
   if (!m.paperBookOpened) return "open_paper_book";
   if (!m.paperShopExam) return "paper_shop_exam";
   if (!m.workshopMade) return "make_paper";
+  if (!m.firstPaperShownToGrandma) return "return_to_grandma";
   if (state.ordersCompleted < 1) return "deliver_order";
 
   return "chapter1_done";
 }
 
 function updateHud() {
+  ensureInventory();
   updateReputationLevel();
   coinText.textContent = state.coins;
   reputationText.textContent = state.reputation;
   if (reputationLevelText) reputationLevelText.textContent = getReputationLevelInfo().name;
+  if (craftedPaperText) craftedPaperText.textContent = `${craftedPaperCount()} 张`;
 
   const ch = state.storyChapter;
   const steps = [{ text: `▶ ${getStoryChapterTitle()}`, done: false, chapter: true }];
@@ -1277,8 +1361,9 @@ function updateHud() {
       find_grandma: "→ 纸铺灯还亮着，外婆似乎在等你。",
       open_paper_book: "→ 打开外婆的纸样册，先认清三种纸性。",
       paper_shop_exam: "→ 替王大爷判断行草该用哪种纸。",
-      make_paper: "→ 工坊水声未歇，去试着做第一张纸。",
-      deliver_order: "→ 把做好的纸送到书画铺。",
+      make_paper: "→ 前往宣纸工坊，试着做出第一张宣纸。",
+      return_to_grandma: "→ 带着亲手做出的宣纸回宣纸铺找外婆。",
+      deliver_order: "→ 可以去书画铺接取用纸订单，或继续在工坊制作宣纸。",
       chapter1_done: "→ 第一张纸送出去了，老街有了新的传闻。"
     };
     const chapterOneStep = getChapterOneStep();
@@ -1305,6 +1390,9 @@ function updateHud() {
   if (state.reputation >= 50) steps.push({ text: "声望解锁：集市非遗节", done: festivalProgress() > 0 });
   if (state.reputation >= 90) steps.push({ text: "声望解锁：非遗馆深层图鉴", done: state.storyMilestones.museumVisited });
   if (state.reputation >= 140) steps.push({ text: "声望解锁：终章线索", done: state.finaleShown });
+  if (state.task === "亲手制作的宣纸不足，请先去工坊做纸。") {
+    steps.push({ text: `→ ${state.task}`, done: false });
+  }
 
   const stepsHtml = steps.map(s => {
     if (s.chapter) return `<span class="task-step task-step--active">${s.text}</span>`;
@@ -1522,7 +1610,9 @@ function updateNpcDialogueBubbles() {
     if (!dialogue || !bubble) return;
     const questId = { paperSeller: "marketPainter", craftsperson: "marketPainter", marketVisitor: "marketTourist", forestElder: "forest", workshopMaster: "workshopProcess", dryingElder: "dryingYard", galleryCurator: "museum" }[id];
     if (id === "grandmother") {
-      bubble.textContent = state.upgrades.paperShopSign ? "招牌亮起来了，纸铺也像重新醒了。" : (state.paperPages.paperNature ? "宣屿，你已经能替一张纸说话了。" : "纸要慢慢看，人也要慢慢懂。");
+      bubble.textContent = state.storyMilestones.workshopMade && !state.storyMilestones.firstPaperShownToGrandma
+        ? "带着第一张纸来给外婆看看。"
+        : state.upgrades.paperShopSign ? "招牌亮起来了，纸铺也像重新醒了。" : (state.paperPages.paperNature ? "宣屿，你已经能替一张纸说话了。" : "纸要慢慢看，人也要慢慢懂。");
     } else if (id === "workshopMaster" && state.upgrades.workshopTools) {
       bubble.textContent = "工具修顺手了，今天可以讲得更细。";
     } else if (id === "dryingElder" && state.upgrades.dryingRacks) {
@@ -1556,9 +1646,46 @@ function getNpcInteractionPrompt(id) {
   return `<span class="interaction-key">${NPC_INTERACT_KEY_LABEL}</span><span>${actionLabel}</span>`;
 }
 
+function canShowFirstPaperToGrandma() {
+  return state.storyMilestones.workshopMade && !state.storyMilestones.firstPaperShownToGrandma && craftedPaperCount() > 0;
+}
+
+// 外婆第一次认可亲手制纸，把工坊产物正式接回主线。
+function showFirstPaperToGrandma() {
+  state.storyMilestones.grandmaTalked = true;
+  state.storyMilestones.firstPaperShownToGrandma = true;
+  if (state.mainQuest) state.mainQuest.step = "take_orders";
+  if (state.paperPages) state.paperPages.craft = true;
+  state.task = "可以去书画铺接取用纸订单，或继续在工坊制作宣纸。";
+  addReputation(10, "外婆认可了宣屿的第一张纸");
+  addCoins(10, "完成第一张宣纸交付");
+  updateHud();
+  updateNpcDialogueBubbles();
+  openModal(`
+    <section class="grandmother-dialogue" aria-labelledby="grandmotherFirstPaperTitle">
+      <div class="grandmother-dialogue-portrait" aria-hidden="true"></div>
+      <p class="grandmother-dialogue-kicker">宣纸铺 · 第一张纸</p>
+      <h2 id="grandmotherFirstPaperTitle">外婆接过宣屿的纸</h2>
+      <div class="grandmother-dialogue-copy">
+        <p>这是你亲手做出的第一张纸。它还不算完美，但已经有纸的骨气了。</p>
+        <p>外婆把纸轻轻压平，又推回宣屿手边：纸做出来，就该去到需要它的人那里。</p>
+      </div>
+      <div class="reward-items"><span>金币 +10</span><span>声望 +10</span><span>工坊纸可用于订单与展柜</span></div>
+      <div class="grandmother-dialogue-actions">
+        <button class="paper-realm-primary" type="button" data-action="openOrderBoard">去书画铺接订单</button>
+        <button class="paper-realm-secondary" type="button" data-action="close">继续逛老街</button>
+      </div>
+    </section>
+  `, "modal", "grandmother-dialogue-card");
+  return true;
+}
+
 function advanceNpcDialogue(id) {
   const dialogue = MARKET_NPC_DIALOGUES[id];
   if (!dialogue) return false;
+  if (id === "grandmother" && canShowFirstPaperToGrandma()) {
+    return showFirstPaperToGrandma();
+  }
   if (id === "marketVisitor") {
     return openQuestOnce("marketTourist", "这页纸背后的价值已经讲清了。");
   }
@@ -2670,13 +2797,13 @@ function stopMiniGame() {
       dried: false,
       createdAt: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })
     };
-    state.task = "去书画铺查看订单";
-    state.storyMilestones.workshopMade = true;
+    state.task = "带着亲手做出的宣纸回宣纸铺找外婆。";
     completeQuest("workshopProcess");
     unlockPaperSlip("bamboo-screen");
     if (state.storyChapter >= 3 && !state.unlockedKnowledgeCards.has("zhuchui")) {
       unlockPaperSlip("zhuchui");
     }
+    addCraftedPaper(1);
     const chapterEvent = checkStoryProgress();
     if (chapterEvent) {
       openModal(chapterEvent, "modal", "story-chapter-modal");
@@ -3225,12 +3352,31 @@ function formatDifficulty(level) {
   return "◆".repeat(level) + "◇".repeat(Math.max(0, 4 - level));
 }
 
+function getShuhuaDeliveryRule(order) {
+  const override = SHUHUA_DELIVERY_RULES[order?.id] || {};
+  return { ...DEFAULT_SHUHUA_DELIVERY_RULE, ...override };
+}
+
 function openOrderBoard() {
+  if (state.storyMilestones.workshopMade && !state.storyMilestones.firstPaperShownToGrandma) {
+    openModal(`
+      <section class="story-choice-card" aria-labelledby="returnGrandmaTitle">
+        <p class="story-choice-kicker">书画铺 · 用纸委托</p>
+        <h2 id="returnGrandmaTitle">先把第一张纸给外婆看看</h2>
+        <blockquote>这张纸还带着工坊的水汽。先回宣纸铺找外婆，她会告诉你这张纸该去往哪里。</blockquote>
+        <div class="modal-actions">
+          <button class="primary-btn" type="button" data-action="close">回老街找外婆</button>
+        </div>
+      </section>
+    `, "modal", "story-choice-modal");
+    return;
+  }
   const shuhua = getShuhuaState();
   const orderCards = SHUHUA_ORDERS.map((order) => {
     const finished = shuhua.finishedIds.includes(order.id);
     const record = shuhua.results[order.id];
     const bestPaper = getShuhuaPaper(order.bestPaper);
+    const deliveryRule = getShuhuaDeliveryRule(order);
     return `
       <article class="shuhua-order-card ${finished ? "is-finished" : ""}">
         <div class="shuhua-order-seal">${finished ? "已交付" : `难度 ${order.difficulty}`}</div>
@@ -3239,6 +3385,7 @@ function openOrderBoard() {
         <p>${order.request}</p>
         <div class="shuhua-order-tags">
           <span>${formatDifficulty(order.difficulty)}</span>
+          <span>需亲手制纸 ${deliveryRule.paperCost} 张</span>
           <span>${finished ? `结果 ${record?.stars || "已完成"}` : `适配方向：${bestPaper?.name || "按需判断"}`}</span>
         </div>
         <button class="${finished ? "secondary-btn" : "primary-btn"}" type="button" data-action="showShuhuaOrderDetail" data-order-id="${order.id}">
@@ -3257,6 +3404,7 @@ function openOrderBoard() {
         <div class="shuhua-board-stats">
           <span>已交付 <b>${shuhua.finishedIds.length}</b> / ${SHUHUA_ORDERS.length}</span>
           <span>完美匹配 <b>${shuhua.perfectCount || 0}</b></span>
+          <span>亲手制纸 <b>${craftedPaperCount()}</b> 张</span>
         </div>
       </header>
       <div class="shuhua-order-grid">${orderCards}</div>
@@ -3275,6 +3423,7 @@ function showShuhuaOrderDetail(orderId) {
   const finished = shuhua.finishedIds.includes(order.id);
   const record = shuhua.results[order.id];
   const bestPaper = getShuhuaPaper(order.bestPaper);
+  const deliveryRule = getShuhuaDeliveryRule(order);
   const acceptable = order.acceptablePapers.map((paperId) => getShuhuaPaper(paperId)?.name).filter(Boolean).join("、");
   openModal(`
     <section class="shuhua-detail" aria-labelledby="shuhuaDetailTitle">
@@ -3286,13 +3435,15 @@ function showShuhuaOrderDetail(orderId) {
         <p>${order.scene}</p>
         <div class="shuhua-order-tags">
           <span>难度 ${formatDifficulty(order.difficulty)}</span>
+          <span>交付需要亲手制纸 ${deliveryRule.paperCost} 张</span>
+          <span>库存 ${craftedPaperCount()} 张</span>
           ${finished ? `<span>已选：${record?.paperName || bestPaper?.name || "未知"}</span>` : `<span>可接受：${acceptable || "无"}</span>`}
         </div>
       </div>
       <aside class="shuhua-detail-note">
         <span class="shuhua-stamp">${finished ? "已交付" : "配纸"}</span>
         <h3>${finished ? record?.label || "订单已完成" : "读需求，不猜答案"}</h3>
-        <p>${finished ? getShuhuaFeedback(order, record?.result || "wrong") : "先判断客人需要墨色渗化、线条稳定，还是二者之间的平衡。"}</p>
+        <p>${finished ? getShuhuaFeedback(order, record?.result || "wrong") : "先判断客人需要墨色渗化、线条稳定，还是二者之间的平衡；交付时会消耗工坊亲手做出的纸。"}</p>
       </aside>
       <div class="modal-actions">
         <button class="secondary-btn" type="button" data-action="openOrderBoard">回到订单</button>
@@ -3306,6 +3457,7 @@ function showPaperSelectionForOrder(orderId) {
   const order = getShuhuaOrder(orderId);
   if (!order) return;
   getShuhuaState().currentOrderId = order.id;
+  const deliveryRule = getShuhuaDeliveryRule(order);
   const paperCards = SHUHUA_PAPERS.map((paper) => `
     <article class="shuhua-paper-card">
       <div class="shuhua-paper-seal">${paper.name.slice(0, 1)}</div>
@@ -3320,6 +3472,7 @@ function showPaperSelectionForOrder(orderId) {
         <p class="shuhua-kicker">订单配纸</p>
         <h2 id="shuhuaSelectionTitle">${order.customer} · ${order.title}</h2>
         <blockquote>${order.request}</blockquote>
+        <p class="shuhua-stock-note">库存：亲手制纸 ${craftedPaperCount()} 张，本订单交付需要 ${deliveryRule.paperCost} 张。</p>
       </header>
       <div class="shuhua-paper-grid">${paperCards}</div>
       <div class="modal-actions">
@@ -3350,21 +3503,29 @@ function completeShuhuaOrder(orderId, selectedPaperId) {
     showShuhuaStoredResult(order.id);
     return;
   }
-  const rewardCoins = 15;
+  const deliveryRule = getShuhuaDeliveryRule(order);
+  if (!consumeCraftedPaper(deliveryRule.paperCost)) {
+    return;
+  }
+  const rewardCoins = deliveryRule.coins;
+  const rewardReputation = deliveryRule.reputation;
 
   shuhua.finishedIds.push(order.id);
   shuhua.completed += 1;
   if (result === "perfect") shuhua.perfectCount += 1;
   state.ordersCompleted += 1;
-  addCoins(rewardCoins, "完成书画铺用纸委托。");
-  addReputation(8, "客人认可了这次配纸。");
+  state.task = "可以去书画铺接取用纸订单，或继续在工坊制作宣纸。";
+  addCoins(rewardCoins, deliveryRule.coinsReason);
+  addReputation(rewardReputation, deliveryRule.reputationReason);
   shuhua.results[order.id] = {
     result,
     label: resultMeta.label,
     stars: resultMeta.stars,
     paperId: selectedPaper.id,
     paperName: selectedPaper.name,
-    rewardCoins
+    rewardCoins,
+    rewardReputation,
+    consumedPaper: deliveryRule.paperCost
   };
   if (order.id === "misty_mountain" || order.id === "splash_bamboo") unlockPaperSlip("ink-door");
   if (order.id === "fine_flower_bird") unlockPaperSlip("glue-alum");
@@ -3383,6 +3544,8 @@ function showShuhuaOrderResult(order, selectedPaper, result, rewardCoins = 0, al
   const finalPaper = selectedPaper || getShuhuaPaper(record?.paperId) || getShuhuaPaper(order.bestPaper);
   const resultMeta = getShuhuaResultMeta(finalResult);
   const feedback = getShuhuaFeedback(order, finalResult);
+  const rewardReputation = alreadyFinished ? 0 : (record?.rewardReputation ?? getShuhuaDeliveryRule(order).reputation);
+  const consumedPaper = alreadyFinished ? 0 : (record?.consumedPaper ?? getShuhuaDeliveryRule(order).paperCost);
   const chapterEvent = !alreadyFinished ? checkStoryProgress() : null;
   const chapterAction = chapterEvent ? `<button class="secondary-btn" type="button" data-action="showShuhuaChapterEvent">查看老街回响</button>` : "";
   if (chapterEvent) state.shuhuaOrders.pendingChapterEvent = chapterEvent;
@@ -3406,7 +3569,8 @@ function showShuhuaOrderResult(order, selectedPaper, result, rewardCoins = 0, al
       </div>
       <div class="reward-items">
         <span>金币 +${rewardCoins}</span>
-        <span>声望 +${alreadyFinished ? 0 : 8}</span>
+        <span>声望 +${rewardReputation}</span>
+        <span>亲手制纸 -${consumedPaper} 张</span>
         <span>${alreadyFinished ? "已完成订单不重复领奖" : "订单已记录"}</span>
       </div>
       <div class="modal-actions">
@@ -3559,8 +3723,91 @@ function openPaperCodex() {
   `, "modal", "paper-codex-modal");
 }
 
+function openHandmadePaperExhibit() {
+  const exhibits = ensureMuseumExhibits();
+  const completed = Boolean(exhibits.handmadePaper);
+  const hasPaper = craftedPaperCount() >= 1;
+  const hasGrandmaApproval = state.storyMilestones.firstPaperShownToGrandma === true;
+  const canSubmit = !completed && hasPaper && hasGrandmaApproval;
+  const requirement = completed
+    ? "手作宣纸已经入柜。"
+    : !hasGrandmaApproval
+      ? "先把第一张亲手做出的宣纸带给外婆看看。"
+      : hasPaper
+        ? "可以将 1 张亲手制作的宣纸放入展柜。"
+        : "还需要亲手制作的宣纸，请先去工坊做纸。";
+
+  openModal(`
+    <section class="handmade-exhibit-panel" aria-labelledby="handmadeExhibitTitle">
+      <header class="street-repair-header">
+        <p class="shuhua-kicker">非遗馆 · 手作展柜</p>
+        <h2 id="handmadeExhibitTitle">手作宣纸展柜</h2>
+        <p>展柜里不只放旧物，也要放宣屿亲手做出的新纸，证明这门手艺还在继续。</p>
+      </header>
+      <article class="street-repair-card ${completed ? "is-done" : ""}">
+        <span class="street-repair-stamp">${completed ? "已入柜" : "待提交"}</span>
+        <h3>宣屿的手作宣纸</h3>
+        <p>${completed ? "展柜中放入了宣屿亲手做出的宣纸。老街的记忆又被点亮了一角。" : requirement}</p>
+        <div class="street-repair-reward">
+          <span>库存 ${craftedPaperCount()} 张</span>
+          <span>${hasGrandmaApproval ? "外婆已认可" : "等待外婆认可"}</span>
+        </div>
+        <button class="primary-btn" type="button" data-action="submitHandmadePaperExhibit" ${canSubmit ? "" : "disabled"}>放入展柜</button>
+      </article>
+      <div class="modal-actions">
+        <button class="secondary-btn" type="button" data-action="continueMuseum">查看其他展柜</button>
+        <button class="secondary-btn" type="button" data-action="close">返回老街</button>
+      </div>
+    </section>
+  `, "modal", "street-repair-modal");
+}
+
+function submitHandmadePaperExhibit() {
+  const exhibits = ensureMuseumExhibits();
+  if (exhibits.handmadePaper) {
+    showToast("手作宣纸已经放入展柜。");
+    return;
+  }
+  if (!state.storyMilestones.firstPaperShownToGrandma) {
+    showToast("先把第一张亲手做出的宣纸带给外婆看看。");
+    return;
+  }
+  if (!consumeCraftedPaper(1)) return;
+  exhibits.handmadePaper = true;
+  state.unlockedKnowledgeCards.add("handmade_paper");
+  state.unlockedCards.add("手作宣纸");
+  state.task = "可以去书画铺接取用纸订单，或继续在工坊制作宣纸。";
+  updateHud();
+  openModal(`
+    <section class="handmade-exhibit-panel" aria-labelledby="handmadeExhibitDoneTitle">
+      <header class="street-repair-header">
+        <p class="shuhua-kicker">非遗馆 · 展柜点亮</p>
+        <h2 id="handmadeExhibitDoneTitle">手作宣纸入柜</h2>
+        <p>展柜中放入了宣屿亲手做出的宣纸。老街的记忆又被点亮了一角。</p>
+      </header>
+      <div class="reward-items"><span>亲手制纸 -1 张</span><span>图鉴：handmade_paper</span></div>
+      <div class="modal-actions">
+        <button class="primary-btn" type="button" data-action="continueMuseum">继续参观非遗馆</button>
+        <button class="secondary-btn" type="button" data-action="openPaperCodex">查看纸谱十二笺</button>
+      </div>
+    </section>
+  `, "modal", "street-repair-modal", { replace: true });
+}
+
+function continueMuseum() {
+  openMuseumCore();
+}
+
 function openMuseum() {
   state.storyMilestones.museumVisited = true;
+  if (!ensureMuseumExhibits().handmadePaper) {
+    openHandmadePaperExhibit();
+    return;
+  }
+  openMuseumCore();
+}
+
+function openMuseumCore() {
   if (paperPageCount() >= 6 && state.reputation < 90) {
     showToast(`声望不足：还需要 ${90 - state.reputation} 声望才能查看非遗馆深层图鉴。`);
     openPaperPagesCodex();
@@ -3586,6 +3833,8 @@ function handleAction(action, dataset = {}) {
   if (action === "openPaperShop") { openPaperShop(); return; }
   if (action === "openPaperCodex") { openPaperCodex(); return; }
   if (action === "openPaperPagesCodex") { openPaperPagesCodex(); return; }
+  if (action === "submitHandmadePaperExhibit") { submitHandmadePaperExhibit(); return; }
+  if (action === "continueMuseum") { continueMuseum(); return; }
   if (action === "openQuest") { openQuestOnce(dataset.questId); return; }
   if (action === "answerQuest") { answerQuest(dataset.questId, dataset.option); return; }
   if (action === "openStoryChoice") { openStoryChoice(dataset.caseId); return; }
