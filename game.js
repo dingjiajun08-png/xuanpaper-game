@@ -100,10 +100,22 @@ const state = {
   flags: {},               // 轻量开关：apprenticeProcessCleared 等
   coins: 0,
   reputation: 0,
-  upgrades: { bambooMat: false, pulpRecipe: false, workbench: false, barkStorage: false },
+  reputationLevel: 1,
+  upgrades: {
+    bambooMat: false,
+    pulpRecipe: false,
+    workbench: false,
+    barkStorage: false,
+    paperShopSign: false,
+    workshopTools: false,
+    dryingRacks: false,
+    marketBooths: false,
+    museumCabinet: false
+  },
   currentOrder: null,
   orderQueue: [],
   orderJudgments: new Set(),
+  shuhuaOrders: { completed: 0, currentOrderId: null, finishedIds: [], perfectCount: 0, results: {} },
   paperPages: { qingtan: false, straw: false, water: false, craft: false, drying: false, paperNature: false, heritage: false },
   completedQuests: new Set(),
   task: "探索宣纸铺与纸境千年",
@@ -156,6 +168,57 @@ const state = {
   ])),
   nearbyNpcDialogueId: null
 };
+
+const REPUTATION_LEVELS = Object.freeze([
+  { min: 0, level: 1, name: "初识纸香" },
+  { min: 20, level: 2, name: "小有纸名" },
+  { min: 50, level: 3, name: "老街相托" },
+  { min: 90, level: 4, name: "百工认可" },
+  { min: 140, level: 5, name: "纸境传人" }
+]);
+
+const STREET_REPAIRS = Object.freeze([
+  {
+    id: "paperShopSign",
+    name: "修复宣纸铺招牌",
+    cost: 20,
+    reputation: 5,
+    desc: "外婆的纸铺重新挂上醒目的木牌，路过的人更愿意停下看看。",
+    doneText: "宣纸铺招牌已修好，外婆说老街终于有了精神。"
+  },
+  {
+    id: "workshopTools",
+    name: "修复工坊工具",
+    cost: 30,
+    reputation: 10,
+    desc: "补齐捞纸、舂料和压纸工具，工坊师傅愿意教得更细。",
+    doneText: "工坊工具顺手了，师傅愿意多讲一道手艺。"
+  },
+  {
+    id: "dryingRacks",
+    name: "修复晒纸架",
+    cost: 40,
+    reputation: 10,
+    desc: "晒纸架重新稳住，湿纸能平平整整地贴上墙面。",
+    doneText: "晒纸架修好了，晒纸老人点头让你多试几回。"
+  },
+  {
+    id: "marketBooths",
+    name: "布置集市摊位",
+    cost: 50,
+    reputation: 15,
+    desc: "给纸市添灯、修台、摆好纸样，集市重新热闹起来。",
+    doneText: "集市摊位亮起来了，街坊的吆喝声也多了。"
+  },
+  {
+    id: "museumCabinet",
+    name: "修复非遗馆展柜",
+    cost: 80,
+    reputation: 20,
+    desc: "把展柜擦亮、补好灯，纸谱残页终于有了合适的位置。",
+    doneText: "非遗馆展柜重新亮起，馆长愿意开放更多记录。"
+  }
+]);
 
 // 根据宣纸铺柜台位置调整此坐标：用于打开“宣纸铺·分类图鉴”。
 const paperShopInteractZone = { x: 650, y: 716, width: 182, height: 86 };
@@ -429,6 +492,158 @@ const ORDER_TYPES = [
   }
 ];
 
+const SHUHUA_PAPERS = Object.freeze([
+  {
+    id: "sheng_xuan",
+    name: "生宣",
+    desc: "吸水性强，墨色容易自然渗化，适合写意、泼墨、山水和需要墨韵变化的作品。",
+    tags: ["墨韵", "渗化", "写意"]
+  },
+  {
+    id: "shu_xuan",
+    name: "熟宣",
+    desc: "吸水性较弱，线条更容易稳定，适合工整书法、文书、工笔画和细致描绘。",
+    tags: ["清晰", "稳定", "工整"]
+  },
+  {
+    id: "ban_shu_xuan",
+    name: "半熟宣",
+    desc: "介于生宣与熟宣之间，兼顾一点墨色韵味和较好的控制力。",
+    tags: ["折中", "可控", "有韵"]
+  }
+]);
+
+const SHUHUA_ORDERS = Object.freeze([
+  {
+    id: "exam_script",
+    customer: "赶考书生",
+    title: "科举答卷",
+    request: "我要写一份答卷，字迹必须清楚，不容易洇开。",
+    scene: "书生捧着卷轴，神情紧张地站在书画铺前，怕一滴墨毁了整页文章。",
+    bestPaper: "shu_xuan",
+    acceptablePapers: ["ban_shu_xuan"],
+    wrongPapers: ["sheng_xuan"],
+    difficulty: 1,
+    knowledge: "熟宣经过胶矾等处理后吸水性较弱，墨迹不容易扩散，更适合工整书写和需要清楚笔画的文字。",
+    perfectFeedback: "字迹端正清晰，墨色稳稳停在纸面上，整张答卷显得干净可靠。",
+    acceptableFeedback: "字迹基本清楚，只是少数转折处略有毛边，赶考使用还算稳妥。",
+    wrongFeedback: "墨迹向外扩散，细字边缘糊开，答卷显得不够工整。",
+    reward: { perfectCoins: 8, acceptableCoins: 5, wrongCoins: 2 }
+  },
+  {
+    id: "misty_mountain",
+    customer: "山水画师",
+    title: "云雾山水",
+    request: "我要画云雾山水，希望墨色能自然晕开，有远山层次。",
+    scene: "画师摊开半幅山水，远山只差一层雾气，需要纸自己帮墨走一段路。",
+    bestPaper: "sheng_xuan",
+    acceptablePapers: ["ban_shu_xuan"],
+    wrongPapers: ["shu_xuan"],
+    difficulty: 1,
+    knowledge: "生宣吸水和渗化较强，水墨落纸后会沿纤维扩散，适合表现远山、云雾和写意层次。",
+    perfectFeedback: "墨色由浓到淡自然铺开，远山像被雾气轻轻罩住。",
+    acceptableFeedback: "山色有层次，但晕染不够松动，雾气显得稍紧。",
+    wrongFeedback: "墨停在纸面上，远山层次打不开，云雾少了流动感。",
+    reward: { perfectCoins: 8, acceptableCoins: 5, wrongCoins: 2 }
+  },
+  {
+    id: "ledger_contract",
+    customer: "账房先生",
+    title: "账本契约",
+    request: "我要写账本和契约，细字要清楚，不能糊成一片。",
+    scene: "账房先生夹着厚账册，指着密密麻麻的小字说，差一笔都可能算错银钱。",
+    bestPaper: "shu_xuan",
+    acceptablePapers: ["ban_shu_xuan"],
+    wrongPapers: ["sheng_xuan"],
+    difficulty: 2,
+    knowledge: "文书和契约重在清楚、稳定、便于保存，熟宣更能控制细字边缘，不容易让墨线糊在一起。",
+    perfectFeedback: "小字一笔一画分明，账目和契约条款都读得清楚。",
+    acceptableFeedback: "大部分字迹可辨，只是密集处略显发虚。",
+    wrongFeedback: "细字互相洇连，账目像蒙了一层雾，查阅很费力。",
+    reward: { perfectCoins: 8, acceptableCoins: 5, wrongCoins: 2 }
+  },
+  {
+    id: "festival_sign",
+    customer: "节日摊主",
+    title: "节日招牌",
+    request: "我要写一张节日招牌，既要有一点墨韵，也要让路人看得清。",
+    scene: "摊主抱着木牌跑来，想让招牌热闹些，又担心字太花看不清。",
+    bestPaper: "ban_shu_xuan",
+    acceptablePapers: ["shu_xuan"],
+    wrongPapers: ["sheng_xuan"],
+    difficulty: 2,
+    knowledge: "半熟宣处在生宣和熟宣之间，既保留一定墨色变化，又比生宣更好控制，适合这种折中需求。",
+    perfectFeedback: "招牌有墨韵也有骨架，远远看去醒目而不呆板。",
+    acceptableFeedback: "字很清楚，只是墨色韵味少了一点，节日气氛略收。",
+    wrongFeedback: "墨色散得太开，路人还没看清字，边缘已经糊成一片。",
+    reward: { perfectCoins: 8, acceptableCoins: 5, wrongCoins: 2 }
+  },
+  {
+    id: "fine_flower_bird",
+    customer: "工笔画娘子",
+    title: "细致花鸟",
+    request: "我要画细致花鸟，线条要稳，颜色不能乱晕。",
+    scene: "她带来一张勾线稿，花瓣边缘极细，最怕设色时颜色越界。",
+    bestPaper: "shu_xuan",
+    acceptablePapers: ["ban_shu_xuan"],
+    wrongPapers: ["sheng_xuan"],
+    difficulty: 3,
+    knowledge: "工笔画强调线条、设色和细部控制，熟宣渗化弱，适合反复设色和精细描绘。",
+    perfectFeedback: "花鸟线条清稳，颜色停在该停的位置，层层设色也不乱。",
+    acceptableFeedback: "大体能控制住，少数花瓣边缘还有轻微晕开。",
+    wrongFeedback: "颜色顺着纸纹跑开，花瓣和羽毛的细节被墨色吞掉了。",
+    reward: { perfectCoins: 8, acceptableCoins: 5, wrongCoins: 2 }
+  },
+  {
+    id: "splash_bamboo",
+    customer: "老画师",
+    title: "泼墨竹石",
+    request: "我要画泼墨竹石，墨色要有层次，最好能自然渗化。",
+    scene: "老画师只带一支饱墨大笔，说竹石要一口气写出来，纸不能把墨气闷住。",
+    bestPaper: "sheng_xuan",
+    acceptablePapers: ["ban_shu_xuan"],
+    wrongPapers: ["shu_xuan"],
+    difficulty: 3,
+    knowledge: "泼墨和写意依赖水墨的浓淡、干湿、虚实变化，生宣能让墨色自然铺展，形成更丰富的墨韵。",
+    perfectFeedback: "竹叶墨气淋漓，石面浓淡相生，水墨层次自然长出来。",
+    acceptableFeedback: "有些墨韵，但扩散不够酣畅，竹石的气势稍弱。",
+    wrongFeedback: "墨色被锁在笔画里，泼墨变成了描边，少了写意的畅快。",
+    reward: { perfectCoins: 8, acceptableCoins: 5, wrongCoins: 2 }
+  },
+  {
+    id: "copybook_teacher",
+    customer: "私塾先生",
+    title: "临摹字帖",
+    request: "我要给学生写一张字帖，笔画要清楚，方便临摹。",
+    scene: "先生说孩子们照着练字，横竖撇捺都要看得明白，不能靠猜。",
+    bestPaper: "shu_xuan",
+    acceptablePapers: ["ban_shu_xuan"],
+    wrongPapers: ["sheng_xuan"],
+    difficulty: 4,
+    knowledge: "临摹字帖要让学习者看清起笔、行笔和收笔，熟宣更适合呈现稳定清晰的笔画边界。",
+    perfectFeedback: "每个笔画都清清楚楚，学生照着临摹时能看见用笔方向。",
+    acceptableFeedback: "大字还清楚，小笔画的边缘略有松动。",
+    wrongFeedback: "笔画边缘洇散，孩子们难以分辨准确的字形结构。",
+    reward: { perfectCoins: 8, acceptableCoins: 5, wrongCoins: 2 }
+  },
+  {
+    id: "teahouse_poem",
+    customer: "茶馆掌柜",
+    title: "雅集诗笺",
+    request: "我要写一张茶馆雅集的诗笺，既要有书写感，也想保留一点墨色韵味。",
+    scene: "掌柜想把诗笺挂在茶席旁，既不能太板，也不能洇得客人读不清。",
+    bestPaper: "ban_shu_xuan",
+    acceptablePapers: ["shu_xuan"],
+    wrongPapers: ["sheng_xuan"],
+    difficulty: 4,
+    knowledge: "半熟宣兼顾书写控制和墨色变化，适合诗笺、招牌、小幅书画等既要可读性又要气韵的场景。",
+    perfectFeedback: "诗句清雅可读，转折处还留着一点墨色韵味，正合茶席气氛。",
+    acceptableFeedback: "字迹很稳，但墨色变化稍少，雅致有余而灵动不足。",
+    wrongFeedback: "墨色散得太开，诗句读起来吃力，挂在茶席旁不够清爽。",
+    reward: { perfectCoins: 8, acceptableCoins: 5, wrongCoins: 2 }
+  }
+]);
+
 const legacyKnowledgeCardIds = [
   "青檀树皮",
   "沙田稻草",
@@ -524,8 +739,10 @@ const joystickStick = document.querySelector("#joystickStick");
 const toast = document.querySelector("#toast");
 const coinText = document.querySelector("#coinText");
 const reputationText = document.querySelector("#reputationText");
+const reputationLevelText = document.querySelector("#reputationLevelText");
 const taskSteps = document.querySelector("#taskSteps");
 const paperPagesButton = document.querySelector("#paperPagesButton");
+const streetRepairButton = document.querySelector("#streetRepairButton");
 
 // NPC 对话气泡 DOM 缓存，applyMapLayout 时重置
 let _npcDialogueCache = null;
@@ -534,13 +751,72 @@ function paperPageCount() {
   return Object.values(state.paperPages).filter(Boolean).length;
 }
 
+function getReputationLevelInfo(reputation = state.reputation) {
+  return REPUTATION_LEVELS.reduce((current, item) => (reputation >= item.min ? item : current), REPUTATION_LEVELS[0]);
+}
+
+// 金币是可消费资源：所有收入统一走这里，避免散落的加分逻辑失控。
+function addCoins(amount, reason = "") {
+  const value = Math.max(0, Number(amount) || 0);
+  if (!value) return 0;
+  state.coins += value;
+  updateHud();
+  showToast(`获得 ${value} 金币${reason ? `：${reason}` : "。"}`);
+  return value;
+}
+
+// 金币支出统一走这里；不足时只提示，不改变状态。
+function spendCoins(amount, reason = "") {
+  const value = Math.max(0, Number(amount) || 0);
+  if (state.coins < value) {
+    const missing = value - state.coins;
+    showToast(`金币不足，还需要 ${missing} 金币${reason ? `才能${reason}` : "。"}`);
+    return false;
+  }
+  state.coins -= value;
+  updateHud();
+  showToast(`花费 ${value} 金币${reason ? `：${reason}` : "。"}`);
+  return true;
+}
+
+// 声望只增加不消耗：代表老街对宣屿的认可。
+function addReputation(amount, reason = "") {
+  const value = Math.max(0, Number(amount) || 0);
+  if (!value) return 0;
+  state.reputation += value;
+  const leveledUp = updateReputationLevel();
+  updateHud();
+  if (!leveledUp) showToast(`声望 +${value}${reason ? `：${reason}` : "。"}`);
+  return value;
+}
+
+function updateReputationLevel() {
+  const previous = state.reputationLevel || 1;
+  const info = getReputationLevelInfo();
+  state.reputationLevel = info.level;
+  if (info.level > previous) {
+    showToast(`声望提升：${info.name}。老街愿意托付更多事了。`);
+    return true;
+  }
+  return false;
+}
+
+function getQuestReward(questId) {
+  if (questId === "paperShop") return { coins: 10, reputation: 5, reason: "帮顾客选对了纸。" };
+  if (questId === "workshopProcess") return { coins: 20, reputation: 10, reason: "理清了工坊工序。" };
+  if (questId === "dryingYard") return { coins: 20, reputation: 10, reason: "掌握了晒纸要点。" };
+  if (questId === "marketTourist" || questId === "marketPainter") return { coins: 12, reputation: 10, reason: "让集市的人更懂宣纸。" };
+  return { coins: 10, reputation: 5, reason: "完成老街委托。" };
+}
+
 function completeQuest(questId) {
   const quest = quests[questId];
   if (!quest || state.completedQuests.has(questId)) return false;
   state.completedQuests.add(questId);
   state.paperPages[quest.page] = true;
-  state.coins += 15;
-  updateHud();
+  const reward = getQuestReward(questId);
+  addCoins(reward.coins, reward.reason);
+  addReputation(reward.reputation, "老街的人开始记住宣屿了。");
   showToast(`纸页归位：${PAPER_PAGES[quest.page].title}`);
   // 完成"帮学徒理清工序"后解锁工坊小游戏
   if (questId === "workshopProcess") {
@@ -902,6 +1178,7 @@ function unlockPaperSlip(id) {
     wax: "生宣与熟宣", gold: "墨分五色", zhuchui: "七十二道工序"
   }[id];
   if (legacyCard) state.unlockedCards.add(legacyCard);
+  addReputation(12, `纸谱残页《${slip.title}》归位。`);
   showToast(`纸谱残页归位：${slip.title}`);
   updateStoryTask();
   return true;
@@ -962,10 +1239,12 @@ function answerStoryChoice(slipId, option) {
     openStoryChoice(slipId, `再想想：${slip.wrongHint}`);
     return;
   }
-  if (slipId === "ink-door") state.storyMilestones.paperShopExam = true;
+  if (slipId === "ink-door") {
+    state.storyMilestones.paperShopExam = true;
+    completeQuest("paperShop");
+  }
   if (slipId === "qingtan-bark") state.storyMilestones.qingtanVisited = true;
   if (slipId === "rice-straw") state.storyMilestones.riceVisited = true;
-  if (slipId === "ink-door") completeQuest("paperShop");
   openPaperSlipReward(slipId, slipId === "ink-door" ? "openPaperShop" : "close", true);
 }
 
@@ -986,8 +1265,10 @@ function getChapterOneStep() {
 }
 
 function updateHud() {
+  updateReputationLevel();
   coinText.textContent = state.coins;
   reputationText.textContent = state.reputation;
+  if (reputationLevelText) reputationLevelText.textContent = getReputationLevelInfo().name;
 
   const ch = state.storyChapter;
   const steps = [{ text: `▶ ${getStoryChapterTitle()}`, done: false, chapter: true }];
@@ -1017,9 +1298,13 @@ function updateHud() {
     else if (state.ordersCompleted < 4) steps.push({ text: `→ 完成不同用途的用纸委托（${state.ordersCompleted}/4）`, done: false });
     else steps.push({ text: "→ 前往非遗馆，准备重新开馆", done: false });
   }
-  if (state.coins >= 150 && Object.values(state.upgrades).some(v => !v)) {
+  if (state.coins >= 150 && ["bambooMat", "pulpRecipe", "workbench", "barkStorage"].some((id) => !state.upgrades[id])) {
     steps.push({ text: '💰 可升级工坊设备', done: false });
   }
+  if (state.reputation >= 20) steps.push({ text: "声望解锁：工坊基础任务", done: state.storyMilestones.workshopMade });
+  if (state.reputation >= 50) steps.push({ text: "声望解锁：集市非遗节", done: festivalProgress() > 0 });
+  if (state.reputation >= 90) steps.push({ text: "声望解锁：非遗馆深层图鉴", done: state.storyMilestones.museumVisited });
+  if (state.reputation >= 140) steps.push({ text: "声望解锁：终章线索", done: state.finaleShown });
 
   const stepsHtml = steps.map(s => {
     if (s.chapter) return `<span class="task-step task-step--active">${s.text}</span>`;
@@ -1237,7 +1522,15 @@ function updateNpcDialogueBubbles() {
     if (!dialogue || !bubble) return;
     const questId = { paperSeller: "marketPainter", craftsperson: "marketPainter", marketVisitor: "marketTourist", forestElder: "forest", workshopMaster: "workshopProcess", dryingElder: "dryingYard", galleryCurator: "museum" }[id];
     if (id === "grandmother") {
-      bubble.textContent = state.paperPages.paperNature ? "宣屿，你已经能替一张纸说话了。" : "纸要慢慢看，人也要慢慢懂。";
+      bubble.textContent = state.upgrades.paperShopSign ? "招牌亮起来了，纸铺也像重新醒了。" : (state.paperPages.paperNature ? "宣屿，你已经能替一张纸说话了。" : "纸要慢慢看，人也要慢慢懂。");
+    } else if (id === "workshopMaster" && state.upgrades.workshopTools) {
+      bubble.textContent = "工具修顺手了，今天可以讲得更细。";
+    } else if (id === "dryingElder" && state.upgrades.dryingRacks) {
+      bubble.textContent = "晒纸架稳了，湿纸贴上去才不慌。";
+    } else if ((id === "paperSeller" || id === "craftsperson" || id === "marketVisitor") && state.upgrades.marketBooths) {
+      bubble.textContent = "摊位布置好了，纸市的人气也回来了。";
+    } else if (id === "galleryCurator" && state.upgrades.museumCabinet) {
+      bubble.textContent = "展柜修好了，更多纸谱可以安心陈列。";
     } else if (questId && quests[questId]) {
       bubble.textContent = state.completedQuests.has(questId) ? quests[questId].after : quests[questId].before;
     } else {
@@ -1482,6 +1775,57 @@ function closeModal() {
 
 function closeBtn(label, variant = "primary-btn") {
   return `<button class="${variant}" type="button" data-action="close">${label}</button>`;
+}
+
+function getRepairItem(repairId) {
+  return STREET_REPAIRS.find((item) => item.id === repairId);
+}
+
+// 老街修复面板：把可消费金币转化为可见设施进度与不可消费声望。
+function openStreetRepairBoard() {
+  const cards = STREET_REPAIRS.map((item) => {
+    const done = Boolean(state.upgrades[item.id]);
+    const affordable = state.coins >= item.cost;
+    return `
+      <article class="street-repair-card ${done ? "is-done" : ""}">
+        <span class="street-repair-stamp">${done ? "已修复" : `${item.cost} 金币`}</span>
+        <h3>${item.name}</h3>
+        <p>${done ? item.doneText : item.desc}</p>
+        <div class="street-repair-reward">
+          <span>声望 +${item.reputation}</span>
+          <span>${done ? "老街已焕新" : affordable ? "可修复" : `还差 ${item.cost - state.coins} 金币`}</span>
+        </div>
+        <button class="${done ? "secondary-btn" : "primary-btn"}" type="button" data-action="${done ? "close" : "repairStreetUpgrade"}" data-repair-id="${item.id}" ${done ? "disabled" : ""}>
+          ${done ? "已完成" : "修复"}
+        </button>
+      </article>
+    `;
+  }).join("");
+
+  openModal(`
+    <section class="street-repair-panel" aria-labelledby="streetRepairTitle">
+      <header class="street-repair-header">
+        <p class="shuhua-kicker">老街修复</p>
+        <h2 id="streetRepairTitle">把金币花在看得见的地方</h2>
+        <p>金币用于修复设施和布置场景；声望代表街坊认可，只会增加，不会消耗。</p>
+      </header>
+      <div class="street-repair-grid">${cards}</div>
+      <div class="modal-actions">
+        <button class="secondary-btn" type="button" data-action="close">返回地图</button>
+      </div>
+    </section>
+  `, "modal", "street-repair-modal");
+}
+
+// 执行单项修复，防重复购买，并通过统一金币/声望函数结算。
+function repairStreetUpgrade(repairId) {
+  const item = getRepairItem(repairId);
+  if (!item || state.upgrades[repairId]) return;
+  if (!spendCoins(item.cost, item.name)) return;
+  state.upgrades[repairId] = true;
+  addReputation(item.reputation, item.doneText);
+  showToast(item.doneText);
+  openStreetRepairBoard();
 }
 
 const paperShowcaseData = [
@@ -1805,6 +2149,11 @@ function openFestivalEntrance() {
 }
 
 function openPaperFestival() {
+  if (state.reputation < 50) {
+    showToast(`声望不足：还需要 ${50 - state.reputation} 声望才能深入集市非遗节。`);
+    openStreetRepairBoard();
+    return;
+  }
   const completed = festivalProgress();
   const stalls = festivalTasks.map((task) => {
     const done = state.completedFestivalTasks.has(task.id);
@@ -1917,6 +2266,8 @@ function answerFestivalTask(taskId, option) {
   if (firstCompletion) {
     state.completedFestivalTasks.add(task.id);
     state.paperCoins += 5;
+    addCoins(12, "完成集市非遗问答。");
+    addReputation(10, "集市的人更愿意听你讲纸。");
     state.earnedStamps.add(task.stamp);
     if (task.slipId) unlockPaperSlip(task.slipId);
   }
@@ -2584,11 +2935,7 @@ function buyUpgrade(upgradeId) {
   }
   const def = UPGRADES[upgradeId];
   if (!def || state.upgrades[upgradeId]) return;
-  if (state.coins < def.cost) {
-    showToast(`金币不足！需要 ${def.cost} 金币，当前只有 ${state.coins}。`);
-    return;
-  }
-  state.coins -= def.cost;
+  if (!spendCoins(def.cost, `升级${def.name}`)) return;
   state.upgrades[upgradeId] = true;
   updateHud();
   showToast(`✅ 升级成功：${def.name}！`);
@@ -2627,7 +2974,7 @@ function buyFestivalItem(itemId) {
 // ========================================
 // 订单系统：生成 + 接单 + 交付
 // ========================================
-function generateOrder(excludeNpcs = []) {
+function legacyGenerateOrder(excludeNpcs = []) {
   // 根据声望过滤可用订单，排除已有NPC
   const available = ORDER_TYPES.filter(o => {
     if (!o.unlockRep) return true;
@@ -2644,7 +2991,7 @@ function generateOrder(excludeNpcs = []) {
   return order;
 }
 
-function openOrderBoard() {
+function legacyOpenOrderBoard() {
   // 首次打开时生成订单列表
   if (state.orderQueue.length === 0) {
     const usedNpcs = [];
@@ -2656,16 +3003,16 @@ function openOrderBoard() {
       usedNpcs.push(introOrder.npc);
     }
     for (let i = state.orderQueue.length; i < 3; i++) {
-      const order = generateOrder(usedNpcs);
+      const order = legacyGenerateOrder(usedNpcs);
       state.orderQueue.push(order);
       usedNpcs.push(order.npc);
     }
   }
   const orderHtml = state.orderQueue.map((order, idx) => {
-    const canDeliver = state.lastPaper && checkOrderRequirements(order, state.lastPaper.stats);
+    const canDeliver = state.lastPaper && legacyCheckOrderRequirements(order, state.lastPaper.stats);
     const judged = state.orderJudgments.has(order.id);
     const locked = order.unlockRep && state.reputation < order.unlockRep;
-    const baseId = getOrderBaseId(order);
+    const baseId = legacyGetOrderBaseId(order);
     const typeClass = baseId.includes("timed") ? "order-type--timed" : baseId.includes("premium") || order.unlockRep >= 25 ? "order-type--premium" : "";
     return `
       <div class="order-card ${locked ? "order-locked" : ""}">
@@ -2707,41 +3054,41 @@ function openOrderBoard() {
   `);
 }
 
-function refreshOrders() {
+function legacyRefreshOrders() {
   state.orderQueue = [];
   const usedNpcs = [];
   for (let i = 0; i < 3; i++) {
-    const order = generateOrder(usedNpcs);
+    const order = legacyGenerateOrder(usedNpcs);
     state.orderQueue.push(order);
     usedNpcs.push(order.npc);
   }
-  openOrderBoard();
+  legacyOpenOrderBoard();
 }
 
-function checkOrderRequirements(order, stats) {
+function legacyCheckOrderRequirements(order, stats) {
   return Object.entries(order.requirements).every(([key, val]) => (stats[key] || 0) >= val);
 }
 
-function getOrderBaseId(order) {
+function legacyGetOrderBaseId(order) {
   if (!order) return "";
   if (order.baseId) return order.baseId;
   if (typeof order.id === "string") return order.id.split("_")[0];
   return "";
 }
 
-const ORDER_SLIP_MAP = {
+const LEGACY_ORDER_SLIP_MAP = {
   "calligraphyMaster": "ink-door",
   "masterLi": "half-cooked",
   "premiumCourt": "glue-alum",
   "mountMaster": "millennium"
 };
 
-function getOrderSlipId(order) {
-  return ORDER_SLIP_MAP[getOrderBaseId(order)] || null;
+function legacyGetOrderSlipId(order) {
+  return LEGACY_ORDER_SLIP_MAP[legacyGetOrderBaseId(order)] || null;
 }
 
-function tryUnlockWaxSlipFromOrder(order) {
-  const baseId = getOrderBaseId(order);
+function legacyTryUnlockWaxSlipFromOrder(order) {
+  const baseId = legacyGetOrderBaseId(order);
   if (
     state.storyChapter >= 2 &&
     order &&
@@ -2753,7 +3100,7 @@ function tryUnlockWaxSlipFromOrder(order) {
   }
 }
 
-function openOrderPaperChoice(orderId, feedback = "") {
+function legacyOpenOrderPaperChoice(orderId, feedback = "") {
   const order = state.orderQueue.find((item) => item.id === orderId);
   if (!order) return;
   const options = ["生宣", "熟宣", "半熟宣"].map((paper) => `<button class="story-choice-option" type="button" data-action="answerOrderPaperChoice" data-order-id="${order.id}" data-paper-type="${paper}">${paper}</button>`).join("");
@@ -2770,19 +3117,19 @@ function openOrderPaperChoice(orderId, feedback = "") {
   `, "modal", "story-choice-modal");
 }
 
-function answerOrderPaperChoice(orderId, paperType) {
+function legacyAnswerOrderPaperChoice(orderId, paperType) {
   const order = state.orderQueue.find((item) => item.id === orderId);
   if (!order) return;
   if (paperType !== order.paperType) {
-    openOrderPaperChoice(orderId, "再想想：先看这位客人要的是墨色变化、线条稳定，还是两者之间的平衡。");
+    legacyOpenOrderPaperChoice(orderId, "再想想：先看这位客人要的是墨色变化、线条稳定，还是两者之间的平衡。");
     return;
   }
   state.orderJudgments.add(orderId);
   showToast("判断正确：现在可以按需求制作并交付。");
-  openOrderBoard();
+  legacyOpenOrderBoard();
 }
 
-function acceptOrder(orderId) {
+function legacyAcceptOrder(orderId) {
   const order = state.orderQueue.find(o => o.id === orderId);
   if (!order) return;
   if (!state.orderJudgments.has(orderId)) {
@@ -2793,17 +3140,17 @@ function acceptOrder(orderId) {
     showToast("你还没有制作的宣纸！先去工坊制作一张。");
     return;
   }
-  if (!checkOrderRequirements(order, state.lastPaper.stats)) {
+  if (!legacyCheckOrderRequirements(order, state.lastPaper.stats)) {
     showToast("这张纸不符合订单要求，请重新制作！");
     return;
   }
   // 交付成功
-  state.coins += order.reward.gold;
-  state.reputation += order.reward.reputation;
+  addCoins(15, "完成书画铺用纸委托。");
+  addReputation(8, "客人认可了这次配纸。");
   state.ordersCompleted += 1;
-  const slipId = getOrderSlipId(order);
+  const slipId = legacyGetOrderSlipId(order);
   if (slipId) unlockPaperSlip(slipId);
-  tryUnlockWaxSlipFromOrder(order);
+  legacyTryUnlockWaxSlipFromOrder(order);
   state.orderQueue = state.orderQueue.filter(o => o.id !== orderId);
   state.orderJudgments.delete(orderId);
   state.task = "继续制作或查看非遗馆";
@@ -2843,6 +3190,267 @@ function acceptOrder(orderId) {
   `);
 }
 
+function getShuhuaState() {
+  if (!state.shuhuaOrders) {
+    state.shuhuaOrders = { completed: 0, currentOrderId: null, finishedIds: [], perfectCount: 0, results: {} };
+  }
+  if (!Array.isArray(state.shuhuaOrders.finishedIds)) state.shuhuaOrders.finishedIds = [];
+  if (!state.shuhuaOrders.results) state.shuhuaOrders.results = {};
+  return state.shuhuaOrders;
+}
+
+function getShuhuaOrder(orderId) {
+  return SHUHUA_ORDERS.find((order) => order.id === orderId);
+}
+
+function getShuhuaPaper(paperId) {
+  return SHUHUA_PAPERS.find((paper) => paper.id === paperId);
+}
+
+function getShuhuaResultMeta(result) {
+  return ({
+    perfect: { label: "完美匹配", stars: "★★★", className: "shuhua-result--perfect", rewardKey: "perfectCoins" },
+    acceptable: { label: "可用匹配", stars: "★★☆", className: "shuhua-result--acceptable", rewardKey: "acceptableCoins" },
+    wrong: { label: "勉强完成", stars: "★☆☆", className: "shuhua-result--wrong", rewardKey: "wrongCoins" }
+  })[result] || ({ label: "勉强完成", stars: "★☆☆", className: "shuhua-result--wrong", rewardKey: "wrongCoins" });
+}
+
+function getShuhuaFeedback(order, result) {
+  if (result === "perfect") return order.perfectFeedback;
+  if (result === "acceptable") return order.acceptableFeedback;
+  return order.wrongFeedback;
+}
+
+function formatDifficulty(level) {
+  return "◆".repeat(level) + "◇".repeat(Math.max(0, 4 - level));
+}
+
+function openOrderBoard() {
+  const shuhua = getShuhuaState();
+  const orderCards = SHUHUA_ORDERS.map((order) => {
+    const finished = shuhua.finishedIds.includes(order.id);
+    const record = shuhua.results[order.id];
+    const bestPaper = getShuhuaPaper(order.bestPaper);
+    return `
+      <article class="shuhua-order-card ${finished ? "is-finished" : ""}">
+        <div class="shuhua-order-seal">${finished ? "已交付" : `难度 ${order.difficulty}`}</div>
+        <p class="shuhua-order-customer">${order.customer}</p>
+        <h3>${order.title}</h3>
+        <p>${order.request}</p>
+        <div class="shuhua-order-tags">
+          <span>${formatDifficulty(order.difficulty)}</span>
+          <span>${finished ? `结果 ${record?.stars || "已完成"}` : `适配方向：${bestPaper?.name || "按需判断"}`}</span>
+        </div>
+        <button class="${finished ? "secondary-btn" : "primary-btn"}" type="button" data-action="showShuhuaOrderDetail" data-order-id="${order.id}">
+          ${finished ? "回顾订单" : "查看委托"}
+        </button>
+      </article>
+    `;
+  }).join("");
+
+  openModal(`
+    <section class="shuhua-board" aria-labelledby="shuhuaBoardTitle">
+      <header class="shuhua-board-header">
+        <p class="shuhua-kicker">书画铺 · 宣纸应用委托</p>
+        <h2 id="shuhuaBoardTitle">按作品需求配纸</h2>
+        <p>客人要的不是“最好的纸”，而是适合这件作品的纸。读需求，判断纸性，再看作品结果。</p>
+        <div class="shuhua-board-stats">
+          <span>已交付 <b>${shuhua.finishedIds.length}</b> / ${SHUHUA_ORDERS.length}</span>
+          <span>完美匹配 <b>${shuhua.perfectCount || 0}</b></span>
+        </div>
+      </header>
+      <div class="shuhua-order-grid">${orderCards}</div>
+      <div class="modal-actions">
+        <button class="secondary-btn" type="button" data-action="close">返回地图</button>
+      </div>
+    </section>
+  `, "modal", "shuhua-order-modal");
+}
+
+function showShuhuaOrderDetail(orderId) {
+  const order = getShuhuaOrder(orderId);
+  if (!order) return;
+  const shuhua = getShuhuaState();
+  shuhua.currentOrderId = order.id;
+  const finished = shuhua.finishedIds.includes(order.id);
+  const record = shuhua.results[order.id];
+  const bestPaper = getShuhuaPaper(order.bestPaper);
+  const acceptable = order.acceptablePapers.map((paperId) => getShuhuaPaper(paperId)?.name).filter(Boolean).join("、");
+  openModal(`
+    <section class="shuhua-detail" aria-labelledby="shuhuaDetailTitle">
+      <div class="shuhua-detail-copy">
+        <p class="shuhua-kicker">${finished ? "已交付回顾" : "新委托"}</p>
+        <h2 id="shuhuaDetailTitle">${order.title}</h2>
+        <p class="shuhua-customer">客人：${order.customer}</p>
+        <blockquote>${order.request}</blockquote>
+        <p>${order.scene}</p>
+        <div class="shuhua-order-tags">
+          <span>难度 ${formatDifficulty(order.difficulty)}</span>
+          ${finished ? `<span>已选：${record?.paperName || bestPaper?.name || "未知"}</span>` : `<span>可接受：${acceptable || "无"}</span>`}
+        </div>
+      </div>
+      <aside class="shuhua-detail-note">
+        <span class="shuhua-stamp">${finished ? "已交付" : "配纸"}</span>
+        <h3>${finished ? record?.label || "订单已完成" : "读需求，不猜答案"}</h3>
+        <p>${finished ? getShuhuaFeedback(order, record?.result || "wrong") : "先判断客人需要墨色渗化、线条稳定，还是二者之间的平衡。"}</p>
+      </aside>
+      <div class="modal-actions">
+        <button class="secondary-btn" type="button" data-action="openOrderBoard">回到订单</button>
+        ${finished ? `<button class="primary-btn" type="button" data-action="showShuhuaOrderResult" data-order-id="${order.id}">查看结果</button>` : `<button class="primary-btn" type="button" data-action="showPaperSelectionForOrder" data-order-id="${order.id}">开始配纸</button>`}
+      </div>
+    </section>
+  `, "modal", "shuhua-order-modal");
+}
+
+function showPaperSelectionForOrder(orderId) {
+  const order = getShuhuaOrder(orderId);
+  if (!order) return;
+  getShuhuaState().currentOrderId = order.id;
+  const paperCards = SHUHUA_PAPERS.map((paper) => `
+    <article class="shuhua-paper-card">
+      <div class="shuhua-paper-seal">${paper.name.slice(0, 1)}</div>
+      <h3>${paper.name}</h3>
+      <button class="primary-btn" type="button" data-action="completeShuhuaOrder" data-order-id="${order.id}" data-paper-id="${paper.id}">选用${paper.name}</button>
+    </article>
+  `).join("");
+
+  openModal(`
+    <section class="shuhua-selection" aria-labelledby="shuhuaSelectionTitle">
+      <header class="shuhua-selection-header">
+        <p class="shuhua-kicker">订单配纸</p>
+        <h2 id="shuhuaSelectionTitle">${order.customer} · ${order.title}</h2>
+        <blockquote>${order.request}</blockquote>
+      </header>
+      <div class="shuhua-paper-grid">${paperCards}</div>
+      <div class="modal-actions">
+        <button class="secondary-btn" type="button" data-action="showShuhuaOrderDetail" data-order-id="${order.id}">返回详情</button>
+      </div>
+    </section>
+  `, "modal", "shuhua-order-modal");
+}
+
+// 书画铺订单完成后只移除本流程的历史页，保留其它页面栈记录。
+function pruneShuhuaPagesFromStack() {
+  state.pageStack = state.pageStack.filter((entry) => !String(entry.pageName || "").startsWith("shuhua-order-modal"));
+}
+
+function completeShuhuaOrder(orderId, selectedPaperId) {
+  const order = getShuhuaOrder(orderId);
+  const selectedPaper = getShuhuaPaper(selectedPaperId);
+  if (!order || !selectedPaper) return;
+  const shuhua = getShuhuaState();
+  shuhua.currentOrderId = order.id;
+  let result = "wrong";
+  if (selectedPaperId === order.bestPaper) result = "perfect";
+  else if (order.acceptablePapers.includes(selectedPaperId)) result = "acceptable";
+
+  const resultMeta = getShuhuaResultMeta(result);
+  const alreadyFinished = shuhua.finishedIds.includes(order.id);
+  if (alreadyFinished) {
+    showShuhuaStoredResult(order.id);
+    return;
+  }
+  const rewardCoins = 15;
+
+  shuhua.finishedIds.push(order.id);
+  shuhua.completed += 1;
+  if (result === "perfect") shuhua.perfectCount += 1;
+  state.ordersCompleted += 1;
+  addCoins(rewardCoins, "完成书画铺用纸委托。");
+  addReputation(8, "客人认可了这次配纸。");
+  shuhua.results[order.id] = {
+    result,
+    label: resultMeta.label,
+    stars: resultMeta.stars,
+    paperId: selectedPaper.id,
+    paperName: selectedPaper.name,
+    rewardCoins
+  };
+  if (order.id === "misty_mountain" || order.id === "splash_bamboo") unlockPaperSlip("ink-door");
+  if (order.id === "fine_flower_bird") unlockPaperSlip("glue-alum");
+  if (order.id === "festival_sign" || order.id === "teahouse_poem") unlockPaperSlip("half-cooked");
+  updateHud();
+
+  pruneShuhuaPagesFromStack();
+  showShuhuaOrderResult(order, selectedPaper, result, rewardCoins, alreadyFinished);
+}
+
+function showShuhuaOrderResult(order, selectedPaper, result, rewardCoins = 0, alreadyFinished = false) {
+  const shuhua = getShuhuaState();
+  shuhua.currentOrderId = null;
+  const record = shuhua.results[order.id];
+  const finalResult = result || record?.result || "wrong";
+  const finalPaper = selectedPaper || getShuhuaPaper(record?.paperId) || getShuhuaPaper(order.bestPaper);
+  const resultMeta = getShuhuaResultMeta(finalResult);
+  const feedback = getShuhuaFeedback(order, finalResult);
+  const chapterEvent = !alreadyFinished ? checkStoryProgress() : null;
+  const chapterAction = chapterEvent ? `<button class="secondary-btn" type="button" data-action="showShuhuaChapterEvent">查看老街回响</button>` : "";
+  if (chapterEvent) state.shuhuaOrders.pendingChapterEvent = chapterEvent;
+
+  openModal(`
+    <section class="shuhua-result ${resultMeta.className}" aria-labelledby="shuhuaResultTitle">
+      <p class="shuhua-kicker">${order.customer} · ${order.title}</p>
+      <h2 id="shuhuaResultTitle">${resultMeta.label}</h2>
+      <div class="shuhua-stars" aria-label="${resultMeta.stars}">${resultMeta.stars}</div>
+      <div class="shuhua-result-layout">
+        <div>
+          <h3>本次用纸：${finalPaper?.name || "未知"}</h3>
+          <p>${finalPaper?.desc || ""}</p>
+          <blockquote>${feedback}</blockquote>
+        </div>
+        <aside>
+          <span class="shuhua-stamp">${alreadyFinished ? "回顾" : `+${rewardCoins}`}</span>
+          <h3>科普解释</h3>
+          <p>${order.knowledge}</p>
+        </aside>
+      </div>
+      <div class="reward-items">
+        <span>金币 +${rewardCoins}</span>
+        <span>声望 +${alreadyFinished ? 0 : 8}</span>
+        <span>${alreadyFinished ? "已完成订单不重复领奖" : "订单已记录"}</span>
+      </div>
+      <div class="modal-actions">
+        <button class="primary-btn" type="button" data-action="close">回到地图</button>
+        <button class="secondary-btn" type="button" data-action="openOrderBoard">查看订单</button>
+        ${chapterAction}
+      </div>
+    </section>
+  `, "modal", "shuhua-order-modal", { replace: true });
+}
+
+function showShuhuaStoredResult(orderId) {
+  const order = getShuhuaOrder(orderId);
+  const record = getShuhuaState().results[orderId];
+  if (!order || !record) return;
+  showShuhuaOrderResult(order, getShuhuaPaper(record.paperId), record.result, 0, true);
+}
+
+function showShuhuaChapterEvent() {
+  const shuhua = getShuhuaState();
+  if (!shuhua.pendingChapterEvent) return closeModal();
+  const html = shuhua.pendingChapterEvent;
+  shuhua.pendingChapterEvent = "";
+  pruneShuhuaPagesFromStack();
+  openModal(html, "modal", "story-chapter-modal", { replace: true });
+}
+
+function openOrderPaperChoice(orderId) {
+  showPaperSelectionForOrder(orderId);
+}
+
+function answerOrderPaperChoice(orderId, paperType) {
+  const map = { "生宣": "sheng_xuan", "熟宣": "shu_xuan", "半熟宣": "ban_shu_xuan" };
+  completeShuhuaOrder(orderId, map[paperType] || paperType);
+}
+
+function acceptOrder(orderId) {
+  showShuhuaOrderDetail(orderId);
+}
+
+function refreshOrders() {
+  openOrderBoard();
+}
+
 // ========================================
 // 主线剧情章节推进
 // ========================================
@@ -2875,10 +3483,10 @@ function checkStoryProgress() {
     updateStoryTask();
     return storyChapterEvent("第三章完", "非遗馆最里面的展柜亮了一半。玻璃上浮现出外婆年轻时的字迹：‘纸有筋骨，人有手艺。若有人愿意继续做，老街便不会老。’");
   }
-  if (state.storyChapter === 4 && paperSlipCount() === PAPER_SLIPS.length && festivalProgress() === festivalTasks.length && state.ordersCompleted >= 4 && state.storyMilestones.museumVisited && !state.finaleShown) {
+  if (state.storyChapter === 4 && state.reputation >= 140 && paperSlipCount() === PAPER_SLIPS.length && festivalProgress() === festivalTasks.length && state.ordersCompleted >= 4 && state.storyMilestones.museumVisited && !state.finaleShown) {
     state.finaleShown = true;
-    state.coins += 300;
-    state.reputation += 100;
+    addCoins(300, "非遗馆重新开馆。");
+    addReputation(100, "老街认可你是新的守纸人。");
     updateStoryTask();
     return `
       <section class="story-finale" aria-labelledby="storyFinaleTitle">
@@ -2895,6 +3503,7 @@ function checkStoryProgress() {
 }
 
 function renderDebugLayer() {
+  if (!mapDebugLayer) return;
   mapDebugLayer.innerHTML = "";
   [...collisionBoxes.map((box) => ({ ...scaleRect(box), type: "collision", label: box.name || box.id })),
    ...interactionZones.map((zone) => ({ ...scaleRect(zone), type: "interaction", label: zone.name || zone.id }))].forEach((box) => {
@@ -2908,19 +3517,21 @@ function renderDebugLayer() {
     mapDebugLayer.appendChild(el);
   });
   const currentZone = state.activeZone ? `${state.activeZone.name} (${state.activeZone.id})` : "无";
-  debugReadout.textContent = [
-    `player x:${Math.round(state.player.x)} y:${Math.round(state.player.y)}`,
-    `camera x:${Math.round(state.camera.x)} y:${Math.round(state.camera.y)}`,
-    `interactionZone: ${currentZone}`,
-    "F2 显示/隐藏 | F3 打印坐标"
-  ].join("\n");
+  if (debugReadout) {
+    debugReadout.textContent = [
+      `player x:${Math.round(state.player.x)} y:${Math.round(state.player.y)}`,
+      `camera x:${Math.round(state.camera.x)} y:${Math.round(state.camera.y)}`,
+      `interactionZone: ${currentZone}`,
+      "F2 显示/隐藏 | F3 打印坐标"
+    ].join("\n");
+  }
 }
 
 function setDebugMode(enabled) {
   state.debugMode = enabled;
-  mapDebugLayer.classList.toggle("visible", enabled);
-  debugReadout.classList.toggle("hidden", !enabled);
-  if (!enabled) mapDebugLayer.innerHTML = "";
+  mapDebugLayer?.classList.toggle("visible", enabled);
+  debugReadout?.classList.toggle("hidden", !enabled);
+  if (!enabled && mapDebugLayer) mapDebugLayer.innerHTML = "";
   updateMap();
 }
 
@@ -2950,6 +3561,11 @@ function openPaperCodex() {
 
 function openMuseum() {
   state.storyMilestones.museumVisited = true;
+  if (paperPageCount() >= 6 && state.reputation < 90) {
+    showToast(`声望不足：还需要 ${90 - state.reputation} 声望才能查看非遗馆深层图鉴。`);
+    openPaperPagesCodex();
+    return;
+  }
   if (paperPageCount() >= 6 && !state.completedQuests.has("museum")) {
     openQuestOnce("museum");
     return;
@@ -2981,7 +3597,14 @@ function handleAction(action, dataset = {}) {
   if (action === "buyUpgrade") { buyUpgrade(dataset.upgradeId); return; }
   if (action === "buyFestivalItem") { buyFestivalItem(dataset.itemId); return; }
   if (action === "openFestivalExchange") { openFestivalExchange(); return; }
+  if (action === "openStreetRepairBoard") { openStreetRepairBoard(); return; }
+  if (action === "repairStreetUpgrade") { repairStreetUpgrade(dataset.repairId); return; }
   if (action === "openOrderBoard") { openOrderBoard(); return; }
+  if (action === "showShuhuaOrderDetail") { showShuhuaOrderDetail(dataset.orderId); return; }
+  if (action === "showPaperSelectionForOrder") { showPaperSelectionForOrder(dataset.orderId); return; }
+  if (action === "completeShuhuaOrder") { completeShuhuaOrder(dataset.orderId, dataset.paperId); return; }
+  if (action === "showShuhuaOrderResult") { showShuhuaStoredResult(dataset.orderId); return; }
+  if (action === "showShuhuaChapterEvent") { showShuhuaChapterEvent(); return; }
   if (action === "openOrderPaperChoice") { openOrderPaperChoice(dataset.orderId); return; }
   if (action === "answerOrderPaperChoice") { answerOrderPaperChoice(dataset.orderId, dataset.paperType); return; }
   if (action === "acceptOrder") { acceptOrder(dataset.orderId); return; }
@@ -3023,6 +3646,7 @@ mobilePauseButton?.addEventListener("click", (event) => {
 });
 
 paperPagesButton?.addEventListener("click", () => openPaperPagesCodex());
+streetRepairButton?.addEventListener("click", () => openStreetRepairBoard());
 
 interactionPrompt.addEventListener("click", (event) => {
   event.preventDefault();
@@ -3097,6 +3721,7 @@ window.addEventListener("pointerup", (event) => {
 
 window.addEventListener("pointercancel", (event) => {
   if (state.joystickPointerId !== event.pointerId) return;
+  event.preventDefault();
   resetJoystick();
 });
 
@@ -3193,7 +3818,7 @@ window.addEventListener("blur", () => {
 
 // 移动端/触屏：点击地图区域让窗口获取焦点（确保键盘事件生效）
 mapViewport.addEventListener("mousedown", () => {
-  window.focus();
+  if (!document.hasFocus()) window.focus();
 });
 
 updateHud();
@@ -3212,14 +3837,23 @@ function _showErrorToast(msg) {
   try { showToast(msg); } catch (_) { /* ignore */ }
 }
 
-window.onerror = function (msg, source, lineno, colno, error) {
-  console.error("全局错误:", { msg: msg, source: source, lineno: lineno, colno: colno, error: error });
+function handleGlobalError(event) {
+  console.error("全局错误:", {
+    msg: event.message,
+    source: event.filename,
+    lineno: event.lineno,
+    colno: event.colno,
+    error: event.error
+  });
   _showErrorToast("游戏出现异常，请刷新页面或查看控制台（F12）");
-  return true;
-};
+  event.preventDefault();
+}
 
-window.onunhandledrejection = function (event) {
+function handleUnhandledRejection(event) {
   console.error("未捕获的 Promise 拒绝:", event.reason);
   _showErrorToast("游戏出现异常，请刷新页面或查看控制台（F12）");
   event.preventDefault();
-};
+}
+
+window.addEventListener("error", handleGlobalError);
+window.addEventListener("unhandledrejection", handleUnhandledRejection);
