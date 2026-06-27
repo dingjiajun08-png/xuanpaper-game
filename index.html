@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=2.0">
+  <title>纸境千年</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="gameRoot" class="game-root">
+    <section id="introScreen" class="intro-screen" aria-label="纸境千年开始界面">
+      <div class="steam-puff" style="--size:60px; --x:28%; --y:38%; --dur:4.2s; --delay:0s; --op:0.22;"></div>
+      <div class="steam-puff" style="--size:48px; --x:32%; --y:40%; --dur:5.1s; --delay:1.3s; --op:0.18;"></div>
+      <div class="steam-puff" style="--size:72px; --x:25%; --y:35%; --dur:6.4s; --delay:0.7s; --op:0.15;"></div>
+      <div class="steam-puff" style="--size:40px; --x:35%; --y:42%; --dur:3.8s; --delay:2.1s; --op:0.20;"></div>
+      <div class="steam-puff" style="--size:56px; --x:30%; --y:36%; --dur:5.7s; --delay:3.0s; --op:0.16;"></div>
+      <div class="steam-puff" style="--size:50px; --x:22%; --y:33%; --dur:4.9s; --delay:1.8s; --op:0.19;"></div>
+      <div class="steam-puff" style="--size:64px; --x:34%; --y:37%; --dur:6.0s; --delay:2.6s; --op:0.14;"></div>
+      <div class="steam-puff" style="--size:44px; --x:27%; --y:31%; --dur:4.5s; --delay:3.5s; --op:0.17;"></div>
+    </section>
+
+    <section id="gameScreen" class="game-screen hidden" aria-label="纸境千年游戏画面">
+      <header class="hud ui-layer-item">
+        <div class="hud-item">
+          <span class="hud-label">金币</span>
+          <strong id="coinText">0</strong>
+        </div>
+        <div class="hud-item">
+          <span class="hud-label">声望</span>
+          <strong id="reputationText">0</strong>
+        </div>
+        <div class="hud-item hud-item--reputation-level">
+          <span class="hud-label">声望等级</span>
+          <strong id="reputationLevelText">初识纸香</strong>
+        </div>
+        <div class="hud-item hud-item--crafted-paper">
+          <span class="hud-label">亲手制纸</span>
+          <strong id="craftedPaperText">0 张</strong>
+        </div>
+        <div class="hud-task" id="hudTask">
+          <span class="hud-label">🎯 当前目标</span>
+          <div id="taskSteps"></div>
+        </div>
+        <button id="streetRepairButton" class="paper-pages-button" type="button" aria-label="打开老街修复">修复</button>
+        <button id="paperPagesButton" class="paper-pages-button" type="button" aria-label="打开七张纸页图鉴">纸页 0 / 7</button>
+      </header>
+
+      <div id="mapViewport" class="map-viewport">
+        <div id="mapWorld" class="map-world">
+          <div id="backgroundLayer" class="map-layer background-layer" aria-hidden="true">
+            <img id="streetMap" class="street-map map-raster" src="assets/maps/old-street-map.png" alt="纸境千年主地图">
+          </div>
+          <div id="entityLayer" class="map-layer entity-layer">
+            <div id="environmentLayer" class="environment-layer" aria-hidden="true">
+              <span class="map-steam map-steam-a"></span>
+              <span class="map-steam map-steam-b"></span>
+              <span class="map-lantern-glow map-lantern-a"></span>
+              <span class="map-lantern-glow map-lantern-b"></span>
+              <span class="water-shimmer water-shimmer-a"></span>
+              <span class="water-shimmer water-shimmer-b"></span>
+              <span class="water-shimmer water-shimmer-c"></span>
+              <span class="paper-drift paper-drift-a"></span>
+              <span class="paper-drift paper-drift-b"></span>
+              <span class="paper-drift paper-drift-c"></span>
+            </div>
+            <div class="map-npc map-npc--paper-seller map-npc--image" style="left: 690px; top: 900px;" data-map-x="690" data-map-y="900" data-depth-sort="true" data-depth-y="900" data-npc-dialogue="paperSeller" role="button" tabindex="0" aria-label="与宣纸摊主交谈"><span class="npc-dialogue-bubble" aria-live="polite"></span></div>
+            <div class="map-npc map-npc--visitor map-npc--image" style="left: 680px; top: 930px;" data-map-x="680" data-map-y="930" data-depth-sort="true" data-depth-y="930" data-npc-dialogue="marketVisitor" role="button" tabindex="0" aria-label="与集市游客交谈"><span class="npc-dialogue-bubble" aria-live="polite"></span></div>
+            <div class="map-npc map-npc--tea-guest map-npc--image" style="left: 830px; top: 900px;" data-map-x="830" data-map-y="900" data-depth-sort="true" data-depth-y="900" data-npc-dialogue="craftsperson" role="button" tabindex="0" aria-label="与非遗匠人交谈"><span class="npc-dialogue-bubble" aria-live="polite"></span></div>
+            <div class="map-npc map-npc--teahouse-owner map-npc--image" style="left: 1000px; top: 395px;" data-map-x="1000" data-map-y="395" data-depth-sort="true" data-depth-y="395" data-npc-dialogue="teahouseOwner" role="button" tabindex="0" aria-label="与茶馆老板交谈"><span class="npc-dialogue-bubble" aria-live="polite"></span></div>
+            <div class="map-npc map-npc--grandmother map-npc--image" style="left: 670px; top: 770px;" data-map-x="670" data-map-y="770" data-depth-sort="true" data-depth-y="770" data-npc-dialogue="grandmother" role="button" tabindex="0" aria-label="与外婆交谈"><span class="npc-dialogue-bubble" aria-live="polite"></span></div>
+            <div id="player" class="player map-player dir-down" data-depth-sort="true" aria-label="玩家角色"></div>
+          </div>
+          <div id="foregroundLayer" class="map-layer foreground-layer" aria-hidden="true">
+            <img id="streetForeground" class="street-foreground map-raster" src="assets/maps/street-foreground.png" alt="">
+          </div>
+          <div id="storyNpcLayer" class="map-layer story-npc-layer">
+            <div class="map-npc map-npc--forest-elder map-npc--image" style="left: 270px; top: 350px;" data-map-x="270" data-map-y="350" data-depth-sort="true" data-depth-y="350" data-npc-dialogue="forestElder" role="button" tabindex="0" aria-label="与护林老人交谈"><span class="npc-dialogue-bubble" aria-live="polite"></span></div>
+            <div class="map-npc map-npc--workshop-master map-npc--image" style="left: 1120px; top: 420px;" data-map-x="1120" data-map-y="420" data-depth-sort="true" data-depth-y="420" data-npc-dialogue="workshopMaster" role="button" tabindex="0" aria-label="与工坊师傅交谈"><span class="npc-dialogue-bubble" aria-live="polite"></span></div>
+            <div class="map-npc map-npc--drying-elder map-npc--image" style="left: 750px; top: 360px;" data-map-x="750" data-map-y="360" data-depth-sort="true" data-depth-y="360" data-npc-dialogue="dryingElder" role="button" tabindex="0" aria-label="与晒纸老人交谈"><span class="npc-dialogue-bubble" aria-live="polite"></span></div>
+            <div class="map-npc map-npc--gallery-curator map-npc--image" style="left: 1200px; top: 850px;" data-map-x="1200" data-map-y="850" data-depth-sort="true" data-depth-y="850" data-npc-dialogue="galleryCurator" role="button" tabindex="0" aria-label="与非遗馆馆长交谈"><span class="npc-dialogue-bubble" aria-live="polite"></span></div>
+          </div>
+          <div id="mapDebugLayer" class="map-debug-layer" aria-hidden="true"></div>
+        </div>
+        <div id="uiLayer" class="ui-layer">
+          <div id="interactionPrompt" class="interaction-prompt hidden"></div>
+          <div id="debugReadout" class="debug-readout hidden"></div>
+          <div id="orientationHint" class="orientation-hint hidden">建议横屏体验《纸境千年》</div>
+        <button id="mobilePauseButton" class="mobile-pause-button mobile-only hidden" type="button">暂停</button>
+        <div id="mobileControls" class="mobile-controls mobile-only hidden" aria-label="虚拟摇杆">
+            <div id="joystickBase" class="joystick-base">
+              <div id="joystickStick" class="joystick-stick"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <footer class="control-bar desktop-only ui-layer-item">
+        <span>A / ← 左移</span>
+        <span>W / ↑ 上移</span>
+        <span>D / → 右移</span>
+        <span>S / ↓ 下移</span>
+        <span>E 交互</span>
+        <span>空格 小游戏操作</span>
+        <span>F 对话</span>
+        <span>Esc 返回或关闭弹窗</span>
+      </footer>
+    </section>
+
+    <div id="modalLayer" class="modal-layer hidden ui-layer-item" role="dialog" aria-modal="true" aria-live="polite">
+      <div id="modalCard" class="modal-card"></div>
+    </div>
+
+    <div id="pauseLayer" class="pause-layer hidden ui-layer-item" role="dialog" aria-modal="true" aria-labelledby="pauseTitle">
+      <div class="pause-card">
+        <h2 id="pauseTitle">暂停</h2>
+        <div class="pause-actions">
+          <button class="primary-btn" type="button" data-pause-action="resume">继续游戏</button>
+          <button class="secondary-btn" type="button" data-pause-action="returnStart">返回开始界面</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast hidden ui-layer-item" role="status"></div>
+  </main>
+
+  <script src="game.js" defer></script>
+</body>
+</html>
